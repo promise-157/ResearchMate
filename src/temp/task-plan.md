@@ -6,34 +6,43 @@
 
 ## 阶段零：环境确认
 
-- [ ] **T0.1** 确认 conda 环境 `researchmate` 可用
-- [ ] **T0.2** 确认 Node.js 可用（nvm）
-- [ ] **T0.3** 确认网络可通 GitHub（下载依赖）
+- [x] **T0.1** 确认 conda 环境 `researchmate` 可用 ✅ Python 3.11.15
+- [x] **T0.2** 确认 Node.js 可用（nvm） ✅ Node 24.15.0, npm 11.12.1
+- [x] **T0.3** 确认网络可通 GitHub（下载依赖） ✅ npm install 成功
 
 ---
 
-## 阶段一：前端骨架初始化
+## 阶段一：前端骨架初始化 ✅ 完成
 
 **产出**：`npm run dev` 能看到 Vue 页面在浏览器打开，3 个路由能跳转。
 
-- [ ] **T1.1** Vite + Vue3 项目初始化
+- [x] **T1.1** Vite + Vue3 项目初始化
   - 创建 `src/frontend` 下的 Vite 项目
   - 文件：`package.json`, `vite.config.js`, `index.html`
-- [ ] **T1.2** 安装依赖
+- [x] **T1.2** 安装依赖 (139 packages, 0 vulnerabilities)
   - `vue@3`, `vue-router@4`, `pinia`, `element-plus`, `axios`, `@element-plus/icons-vue`
-- [ ] **T1.3** 配置 Vite
-  - 代理 `/api` 到 `localhost:8000`
-  - 配置 Element Plus 按需引入（unplugin-vue-components）
-- [ ] **T1.4** 创建入口文件
+- [x] **T1.3** 配置 Vite
+  - 代理 `/api` 到 `127.0.0.1:8000`
+  - 配置 Element Plus 按需引入（unplugin-vue-components + unplugin-auto-import）
+  - 配置 `@` 别名指向 `src/`
+- [x] **T1.4** 创建入口文件
   - `src/main.js` — 挂载 App，注册 Router + Pinia + ElementPlus
-  - `src/App.vue` — `<router-view>` + 顶栏 + 购物车面板
-- [ ] **T1.5** 创建路由骨架（3 个空页面）
+  - `src/App.vue` — `<router-view>` + NavBar + CartDrawer
+- [x] **T1.5** 创建路由骨架（3 个空页面 + lazy load）
   - `src/router/index.js`
-  - `src/views/Home.vue` — 占位文字
-  - `src/views/Papers.vue` — 占位文字
-  - `src/views/Settings.vue` — 占位文字
+  - `src/views/Home.vue` — 占位
+  - `src/views/Papers.vue` — 占位
+  - `src/views/Settings.vue` — 占位
+- [x] **额外完成**（阶段三的前置）
+  - `src/components/NavBar.vue` — 导航栏 + 路由链接 + 购物车角标
+  - `src/components/CartDrawer.vue` — 购物车滑出面板（含复制标题/导出CSV按钮）
+  - `src/stores/cart.js` — Pinia 购物车 store（add/remove/isInCart/count）
+  - `src/stores/settings.js` — Pinia 设置 store（theme/aiConfig/crawlConfig）
+  - `src/api/index.js` — axios 封装 + 全部 API 函数签名
+  - `src/frontend/.gitignore` — node_modules/dist 忽略
+- [x] **vite build 验证通过** (3.23s)
 
-**完成后效果**：浏览器打开 → 看到顶栏 + 空首页 → 点击跳转到Papers/Settings → 都是空页占位
+**完成后效果**：`npm run dev` → 浏览器打开 → 看到顶栏 + 空首页 → NavBar 有路由链接和购物车图标
 
 ---
 
@@ -283,10 +292,10 @@ feat(frontend): 阶段一 - 前端骨架初始化
 
 | 阶段 | 状态 | 完成日期 |
 |------|------|---------|
-| 零: 环境确认 | ⬜ | |
-| 一: 前端骨架 | ⬜ | |
+| 零: 环境确认 | ✅ | 2026-07-24 |
+| 一: 前端骨架 | ✅ | 2026-07-24 |
 | 二: CSS 基础 | ⬜ | |
-| 三: 共享基础 | ⬜ | |
+| 三: 共享基础 | ▶ (部分在阶段一提前做了) | |
 | 四: 首页 | ⬜ | |
 | 五: 论文中心 UI | ⬜ | |
 | 六: 设置 | ⬜ | |

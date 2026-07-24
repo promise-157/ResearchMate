@@ -62,6 +62,18 @@ conda activate researchmate
 
 ## 铁律（违反这些比写 bug 更严重）
 
+### 0. 代码必须可移植 — 禁止硬编码
+
+**别人 clone 下来就能跑，不需要改代码。** 这是工程底线。
+
+- **禁止硬编码绝对路径**。所有路径用 `pathlib.Path(__file__).parent` 或 `os.path.dirname(__file__)` 相对计算
+- **禁止硬编码端口号**。端口通过配置文件或环境变量读取，有默认值即可
+- **禁止写入用户特定的配置到 git**。个人配置（API key、代理、本地路径）走 `.gitignore` 的 `config/local.yaml` 或 `.env`
+- **所有依赖写进 `requirements.txt` / `package.json`**，`npm install` + `pip install -r requirements.txt` 即装即用
+- **版本号用 `^` 或 `>=` 范围**，不要写死 `==1.2.3`（除非有兼容性硬伤）
+- **配置文件用模板 + 说明**。真正的配置由用户复制模板后自行填写，模板在 git 里，个人配置 gitignored
+- **README 写清楚**：需要什么环境、怎么安装、怎么启动
+
 ### 1. 永远不要碰凭证和认证配置
 - **禁止写入、修改、创建任何包含 token、密码、密钥的文件**（包括 `/tmp/`、项目内、任何位置）
 - **禁止修改 `git remote`、`~/.gitconfig`、`~/.ssh/`、git credential 相关配置**

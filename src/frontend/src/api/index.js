@@ -1,0 +1,74 @@
+import axios from 'axios'
+
+const api = axios.create({
+  baseURL: '/api',
+  timeout: 30000,
+})
+
+// 响应拦截：统一错误处理
+api.interceptors.response.use(
+  (res) => res.data,
+  (err) => {
+    const msg = err.response?.data?.detail || err.message || '请求失败'
+    console.error('[API Error]', msg)
+    return Promise.reject(err)
+  },
+)
+
+// ---- 期刊源 ----
+export function fetchJournals() {
+  return api.get('/journals')
+}
+
+export function addJournal(url, label) {
+  return api.post('/journals', { url, label })
+}
+
+export function deleteJournal(id) {
+  return api.delete(`/journals/${id}`)
+}
+
+// ---- 爬取 ----
+export function startCrawl(sourceIds, mode = 'new') {
+  return api.post('/crawl', { source_ids: sourceIds, mode })
+}
+
+export function getCrawlStatus() {
+  return api.get('/crawl/status')
+}
+
+// ---- 论文 ----
+export function fetchPapers(params) {
+  return api.get('/papers', { params })
+}
+
+export function fetchPaperDetail(id) {
+  return api.get(`/papers/${id}`)
+}
+
+export function updatePaper(id, data) {
+  return api.patch(`/papers/${id}`, data)
+}
+
+// ---- 购物车 ----
+export function fetchCart() {
+  return api.get('/cart')
+}
+
+export function exportCart(format = 'csv') {
+  return api.get('/cart/export', { params: { format } })
+}
+
+// ---- 设置 ----
+export function fetchSettings() {
+  return api.get('/settings')
+}
+
+export function updateSettings(data) {
+  return api.put('/settings', data)
+}
+
+// ---- 统计 ----
+export function fetchStats() {
+  return api.get('/stats')
+}
