@@ -93,7 +93,6 @@
 
 <script setup>
 import { ref, computed } from 'vue'
-import { Star, StarFilled, ShoppingCart } from '@element-plus/icons-vue'
 
 const props = defineProps({
   paper: { type: Object, required: true },
