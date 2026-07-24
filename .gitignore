@@ -1,0 +1,49 @@
+# === Python ===
+__pycache__/
+*.py[cod]
+*.egg-info/
+*.egg
+dist/
+.eggs/
+venv/
+.venv/
+env/
+.env
+*.whl
+
+# === Node / Frontend ===
+node_modules/
+dist/
+.vite/
+*.local
+
+# === IDE & Editors ===
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+
+# === OS ===
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# === Project: ResearchMate ===
+CLAUDE.md
+.claude/
+memory/
+config/local.yaml
+logs/
+*.log
+
+# === Data (keep structure, ignore contents) ===
+src/data/*
+!src/data/.gitignore
+
+# === Temp / Drafts ===
+/tmp/
+*.tmp
