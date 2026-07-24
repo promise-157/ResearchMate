@@ -1,0 +1,170 @@
+/* ================================================================
+   ResearchMate — Design Tokens
+   所有颜色/间距/圆角/阴影统一在此定义，组件内只用变量不写硬编码值
+   主题切换：给 <html> 设 data-theme="dark" 即可
+   ================================================================ */
+
+/* ---- Light Theme (default) ---- */
+:root {
+  /* Primary palette */
+  --color-primary: #409eff;
+  --color-primary-light: #66b1ff;
+  --color-primary-lighter: #a0cfff;
+  --color-primary-dark: #337ecc;
+  --color-primary-bg: rgba(64, 158, 255, 0.08);
+
+  /* Semantic */
+  --color-success: #67c23a;
+  --color-success-bg: rgba(103, 194, 58, 0.08);
+  --color-warning: #e6a23c;
+  --color-warning-bg: rgba(230, 162, 60, 0.08);
+  --color-danger: #f56c6c;
+  --color-danger-bg: rgba(245, 108, 108, 0.08);
+  --color-info: #909399;
+
+  /* Code badge — highlight papers with open source */
+  --color-code: #16a34a;
+  --color-code-bg: rgba(22, 163, 74, 0.08);
+
+  /* Backgrounds */
+  --color-bg: #f5f7fa;
+  --color-bg-elevated: #ffffff;
+  --color-bg-nav: rgba(255, 255, 255, 0.85);
+  --color-bg-overlay: rgba(0, 0, 0, 0.5);
+
+  /* Text */
+  --color-text-primary: #1f2937;
+  --color-text-secondary: #6b7280;
+  --color-text-disabled: #c0c4cc;
+
+  /* Border */
+  --color-border: #e5e7eb;
+  --color-border-light: #f3f4f6;
+  --color-border-dark: #d1d5db;
+
+  /* Spacing (4px base) */
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+
+  /* Radius */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* Shadow */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.08);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12);
+  --shadow-card-hover: 0 8px 30px rgba(0, 0, 0, 0.12);
+
+  /* Typography */
+  --font-size-xs: 12px;
+  --font-size-sm: 13px;
+  --font-size-base: 14px;
+  --font-size-md: 16px;
+  --font-size-lg: 18px;
+  --font-size-xl: 22px;
+  --font-size-2xl: 28px;
+  --font-size-title: 20px;
+
+  --font-weight-normal: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  --line-height-tight: 1.25;
+  --line-height-normal: 1.6;
+  --line-height-relaxed: 1.75;
+
+  /* Transitions */
+  --transition-fast: 0.15s ease;
+  --transition-normal: 0.3s ease;
+  --transition-slow: 0.5s ease;
+
+  /* Layout */
+  --navbar-height: 56px;
+  --max-content-width: 1200px;
+  --sidebar-width: 240px;
+}
+
+/* ---- Dark Theme ---- */
+html[data-theme="dark"] {
+  --color-primary: #409eff;
+  --color-primary-light: #66b1ff;
+  --color-primary-lighter: #337ecc;
+  --color-primary-dark: #a0cfff;
+  --color-primary-bg: rgba(64, 158, 255, 0.12);
+
+  --color-success: #67c23a;
+  --color-success-bg: rgba(103, 194, 58, 0.12);
+  --color-warning: #e6a23c;
+  --color-warning-bg: rgba(230, 162, 60, 0.12);
+  --color-danger: #f56c6c;
+  --color-danger-bg: rgba(245, 108, 108, 0.12);
+
+  --color-code: #4ade80;
+  --color-code-bg: rgba(74, 222, 128, 0.12);
+
+  --color-bg: #0f172a;
+  --color-bg-elevated: #1e293b;
+  --color-bg-nav: rgba(15, 23, 42, 0.9);
+  --color-bg-overlay: rgba(0, 0, 0, 0.7);
+
+  --color-text-primary: #e2e8f0;
+  --color-text-secondary: #94a3b8;
+  --color-text-disabled: #475569;
+
+  --color-border: #334155;
+  --color-border-light: #1e293b;
+  --color-border-dark: #475569;
+
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+  --shadow-card-hover: 0 8px 30px rgba(0, 0, 0, 0.5);
+}
+
+/* ---- System preference auto-detection ---- */
+@media (prefers-color-scheme: dark) {
+  html[data-theme="system"] {
+    --color-primary: #409eff;
+    --color-primary-light: #66b1ff;
+    --color-primary-lighter: #337ecc;
+    --color-primary-dark: #a0cfff;
+    --color-primary-bg: rgba(64, 158, 255, 0.12);
+
+    --color-success: #67c23a;
+    --color-success-bg: rgba(103, 194, 58, 0.12);
+    --color-warning: #e6a23c;
+    --color-warning-bg: rgba(230, 162, 60, 0.12);
+    --color-danger: #f56c6c;
+    --color-danger-bg: rgba(245, 108, 108, 0.12);
+
+    --color-code: #4ade80;
+    --color-code-bg: rgba(74, 222, 128, 0.12);
+
+    --color-bg: #0f172a;
+    --color-bg-elevated: #1e293b;
+    --color-bg-nav: rgba(15, 23, 42, 0.9);
+    --color-bg-overlay: rgba(0, 0, 0, 0.7);
+
+    --color-text-primary: #e2e8f0;
+    --color-text-secondary: #94a3b8;
+    --color-text-disabled: #475569;
+
+    --color-border: #334155;
+    --color-border-light: #1e293b;
+    --color-border-dark: #475569;
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
+    --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.5);
+    --shadow-card-hover: 0 8px 30px rgba(0, 0, 0, 0.5);
+  }
+}
