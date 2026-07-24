@@ -7,6 +7,11 @@
       {{ apiStatus === 'ok' ? '✓ 后端已连接' : '✗ 后端未连接 — 请确认 python run.py 已启动' }}
     </div>
 
+    <!-- DEBUG: data flow trace -->
+    <div v-if="debugInfo" class="debug-panel">
+      <div v-for="(line, i) in debugInfo" :key="i" class="debug-line">{{ line }}</div>
+    </div>
+
     <!-- Loading -->
     <div v-if="loading.journals" class="loading-state flex-center">
       <el-icon class="is-loading"><Loading /></el-icon>
@@ -111,6 +116,7 @@ const cartStore = useCartStore()
 
 // ---- State ----
 const apiStatus = ref(null) // null=checking, 'ok', 'offline'
+const debugInfo = ref([])   // TEMP: trace data flow
 const journalSources = ref([])
 const papers = ref([])
 const totalPapers = ref(0)
@@ -156,7 +162,9 @@ async function loadJournals() {
 
 async function loadPapers() {
   loading.papers = true
+  const log = []
   try {
+    log.push(`1. 发起请求 GET /api/papers?page=1&page_size=20`)
     const res = await fetchPapers({
       q: filters.value.search || undefined,
       has_code: filters.value.hasCode || undefined,
@@ -165,13 +173,19 @@ async function loadPapers() {
       page: page.value,
       page_size: pageSize,
     })
+    log.push(`2. 收到响应 typeof=${typeof res} keys=${Object.keys(res || {}).join(',')}`)
     const data = res.data || res
+    log.push(`3. data typeof=${typeof data} keys=${Object.keys(data || {}).join(',')}`)
+    log.push(`4. data.total=${data.total} data.items?.length=${data.items?.length}`)
     papers.value = data.items || []
     totalPapers.value = data.total || 0
+    log.push(`5. papers.value.length=${papers.value.length} totalPapers=${totalPapers.value}`)
   } catch (e) {
+    log.push(`ERR: ${e.message || e}`)
     error.value = '加载论文失败'
   } finally {
     loading.papers = false
+    debugInfo.value = log
   }
 }
 
@@ -333,5 +347,16 @@ async function pollCrawlStatus() {
 .api-status.offline {
   background: var(--color-danger-bg);
   color: var(--color-danger);
+}
+
+.debug-panel {
+  background: #1e293b;
+  color: #4ade80;
+  font-family: monospace;
+  font-size: 12px;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  margin-bottom: var(--space-md);
+  line-height: 1.8;
 }
 </style>
