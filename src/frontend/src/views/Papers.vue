@@ -27,6 +27,14 @@
       <p class="text-small text-secondary">添加期刊源后点击爬取按钮</p>
     </div>
 
+    <!-- BISECT TEST: if this shows but cards don't, PaperCard is broken -->
+    <div v-if="papers.length > 0" style="background:#ecfdf5;padding:8px 16px;border-radius:4px;margin-bottom:12px;font-size:13px">
+      ✓ 已加载 {{ papers.length }} 篇论文 (共 {{ totalPapers }} 篇)
+      <span v-for="p in papers.slice(0,3)" :key="p.id" style="display:block;font-size:12px;color:#666;margin-top:4px">
+        [{{ p.id }}] {{ p.title?.slice(0, 60) }}...
+      </span>
+    </div>
+
     <div v-if="papers.length > 0" class="paper-list">
       <PaperCard
         v-for="paper in papers"
