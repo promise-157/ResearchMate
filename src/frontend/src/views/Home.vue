@@ -45,6 +45,20 @@
         <span class="stat-label">上次更新</span>
       </div>
     </div>
+
+    <!-- Quick links -->
+    <div class="quick-links">
+      <a href="https://github.com/promise-157/ResearchMate/blob/main/docs/QUICKSTART.md" target="_blank">
+        <el-button type="primary" link size="small">
+          <el-icon><Lightning /></el-icon> 快速上手
+        </el-button>
+      </a>
+      <a href="https://github.com/promise-157/ResearchMate/blob/main/docs/MANUAL.md" target="_blank">
+        <el-button type="primary" link size="small">
+          <el-icon><Document /></el-icon> 使用手册
+        </el-button>
+      </a>
+    </div>
   </div>
 </template>
 
@@ -158,5 +172,13 @@ onMounted(async () => {
   width: 1px;
   height: 36px;
   background: var(--color-border);
+}
+
+.quick-links {
+  display: flex;
+  gap: var(--space-md);
+  margin-top: var(--space-lg);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-border-light);
 }
 </style>

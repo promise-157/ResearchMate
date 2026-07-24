@@ -167,7 +167,10 @@ npm run dev
 <!-- DOCUMENTATION -->
 ## Documentation
 
-详细使用说明请参阅 [使用手册](docs/MANUAL.md)。
+| 文档 | 说明 |
+|------|------|
+| [快速上手](docs/QUICKSTART.md) | 5 分钟从零到爬完第一批论文 |
+| [使用手册](docs/MANUAL.md) | 完整功能说明、配置指南、常见问题 |
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
