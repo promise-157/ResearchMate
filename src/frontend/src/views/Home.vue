@@ -15,6 +15,12 @@
         to="/papers"
       />
       <NavCard
+        icon="Notebook"
+        title="使用文档"
+        description="快速上手指南 + 完整使用手册，从安装到高级配置覆盖所有功能"
+        to="/docs"
+      />
+      <NavCard
         icon="Setting"
         title="全局设置"
         description="配置 AI 接口、爬取参数、主题外观，打造适合你的使用体验"
@@ -44,20 +50,6 @@
         <span class="stat-value">{{ stats.lastUpdate }}</span>
         <span class="stat-label">上次更新</span>
       </div>
-    </div>
-
-    <!-- Quick links -->
-    <div class="quick-links">
-      <a href="https://github.com/promise-157/ResearchMate/blob/main/docs/QUICKSTART.md" target="_blank">
-        <el-button type="primary" link size="small">
-          <el-icon><Lightning /></el-icon> 快速上手
-        </el-button>
-      </a>
-      <a href="https://github.com/promise-157/ResearchMate/blob/main/docs/MANUAL.md" target="_blank">
-        <el-button type="primary" link size="small">
-          <el-icon><Document /></el-icon> 使用手册
-        </el-button>
-      </a>
     </div>
   </div>
 </template>
@@ -122,14 +114,14 @@ onMounted(async () => {
 /* Nav Grid */
 .nav-grid {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: var(--space-lg);
   width: 100%;
-  max-width: 900px;
+  max-width: 700px;
   margin-bottom: var(--space-2xl);
 }
 
-@media (max-width: 700px) {
+@media (max-width: 520px) {
   .nav-grid {
     grid-template-columns: 1fr;
     max-width: 360px;
@@ -147,7 +139,7 @@ onMounted(async () => {
   border: 1px solid var(--color-border);
   border-radius: var(--radius-lg);
   width: 100%;
-  max-width: 900px;
+  max-width: 700px;
 }
 
 .stat-item {
@@ -172,13 +164,5 @@ onMounted(async () => {
   width: 1px;
   height: 36px;
   background: var(--color-border);
-}
-
-.quick-links {
-  display: flex;
-  gap: var(--space-md);
-  margin-top: var(--space-lg);
-  padding-top: var(--space-md);
-  border-top: 1px solid var(--color-border-light);
 }
 </style>

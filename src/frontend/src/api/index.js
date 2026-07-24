@@ -76,3 +76,7 @@ export function fetchStats() {
 export function fetchLatestSession() {
   return api.get('/sessions/latest')
 }
+
+export function fetchDoc(name) {
+  return api.get(`/docs/${name}`)
+}

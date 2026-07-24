@@ -4,6 +4,7 @@
       <router-link to="/" class="logo">ResearchMate</router-link>
       <nav class="nav-links">
         <router-link to="/papers">论文中心</router-link>
+        <router-link to="/docs">文档</router-link>
         <router-link to="/settings">设置</router-link>
       </nav>
     </div>
