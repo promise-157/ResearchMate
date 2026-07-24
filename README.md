@@ -89,6 +89,18 @@ ResearchMate 是一个 AI 辅助论文筛选工具。导入你感兴趣的期刊
 | UI 组件 | Element Plus |
 | 数据可视化 | ECharts |
 
+### 数据存储
+
+所有数据存储在本地 SQLite 数据库文件中，不会上传到任何云端服务。
+
+| 项目 | 路径 | 说明 |
+|------|------|------|
+| 数据库文件 | `src/data/researchmate.db` | 论文、期刊源、爬取记录 |
+| 配置文件 | `src/backend/config.yaml` | 启动后自动生成（可选） |
+| 日志 | 终端标准输出 | 不写日志文件，避免膨胀 |
+
+**清理数据**：删除 `src/data/researchmate.db` 即可清空所有数据（重启后端会自动重建空库）。或者在「全局设置 → 数据管理」页面点击清空按钮。
+
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
 
