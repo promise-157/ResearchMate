@@ -72,3 +72,7 @@ export function updateSettings(data) {
 export function fetchStats() {
   return api.get('/stats')
 }
+
+export function fetchLatestSession() {
+  return api.get('/sessions/latest')
+}

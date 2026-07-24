@@ -36,9 +36,10 @@ app.include_router(stats.router, prefix="/api", tags=["stats"])
 @app.on_event("startup")
 def on_startup():
     init_db()
-    # 初始化爬虫注册表
-    from crawlers.registry import init_registry
-    init_registry()
+    from crawlers.registry import init_registry as init_crawlers
+    from processors.registry import init_registry as init_processors
+    init_crawlers()
+    init_processors()
 
 
 @app.get("/api/health")

@@ -117,18 +117,75 @@ async def _do_crawl(source_ids: list, mode: str):
 
         _status["percentage"] = 70
         _status["status"] = "analyzing"
-        _status["message"] = "爬取完成，等待 AI 分析..."
+        _status["message"] = "爬取完成，开始 AI 分析..."
 
-        # 记录 crawl session（后续阶段十 AI 分析写点评）
-        cursor = conn.execute(
-            "INSERT INTO crawl_sessions (sources, paper_count) VALUES (?, ?)",
-            (json.dumps(source_ids), len(all_new_papers)),
+        # ---- AI 分析 ----
+        if all_new_papers:
+            from processors.registry import get as get_processor
+
+            analyzer = get_processor("llm")
+            if analyzer:
+                # 逐篇分析
+                for idx, paper in enumerate(all_new_papers):
+                    _status["percentage"] = 70 + int((idx / len(all_new_papers)) * 20)
+                    _status["message"] = f"AI 分析: {idx + 1}/{len(all_new_papers)}"
+
+                    try:
+                        result = await analyzer.analyze(paper)
+                    except Exception as e:
+                        print(f"[ai] analyze error: {e}")
+                        result = {"has_code": False, "code_url": None, "innovation": None,
+                                  "technologies": "[]", "analyzed": True}
+
+                    # 只有分析成功才更新
+                    if not result.get("analyzed"):
+                        continue
+
+                    # 如果 AI 发现了代码但爬虫没检测到，补充
+                    if result.get("has_code") and not paper.get("has_code"):
+                        paper["has_code"] = True
+                        paper["code_url"] = result.get("code_url")
+
+                    # 更新数据库
+                    conn.execute(
+                        """UPDATE papers SET
+                           has_code = ?, code_url = ?,
+                           ai_innovation = ?, ai_technologies = ?,
+                           ai_analyzed = 1
+                           WHERE arxiv_id = ?""",
+                        (
+                            int(paper.get("has_code", False)),
+                            paper.get("code_url"),
+                            result.get("innovation"),
+                            result.get("technologies", "[]"),
+                            paper.get("arxiv_id"),
+                        ),
+                    )
+                    conn.commit()
+
+                    # 请求间隔（分析时也适当等待）
+                    await asyncio.sleep(0.5)
+
+                _status["percentage"] = 90
+                _status["message"] = "AI 批量点评..."
+
+                # 批量点评
+                ai_review = None
+                try:
+                    ai_review = await analyzer.review(all_new_papers)
+                except Exception as e:
+                    print(f"[ai] review error: {e}")
+
+        # 记录 crawl session
+        conn.execute(
+            "INSERT INTO crawl_sessions (sources, paper_count, ai_review) VALUES (?, ?, ?)",
+            (json.dumps(source_ids), len(all_new_papers), ai_review),
         )
         conn.commit()
 
         _status["status"] = "done"
         _status["percentage"] = 100
-        _status["message"] = f"从 {total_sources} 个源爬取完成，新增 {len(all_new_papers)} 篇"
+        _status["message"] = f"从 {total_sources} 个源爬取完成，新增 {len(all_new_papers)} 篇，AI 分析完毕"
 
     finally:
         conn.close()

@@ -1,6 +1,7 @@
-"""统计概览"""
+"""统计概览 + 最新爬取会话点评"""
+import json
 from fastapi import APIRouter
-from storage.database import get_connection
+from storage.database import get_connection, dict_from_row
 from storage.models import Stats
 
 router = APIRouter()
@@ -24,3 +25,33 @@ def get_stats():
         cart_count=cart_count,
         last_update=last_session["created_at"] if last_session else None,
     )
+
+
+@router.get("/sessions/latest")
+def get_latest_session():
+    """返回最近一次爬取会话（含 AI 点评）。"""
+    conn = get_connection()
+    row = conn.execute(
+        "SELECT * FROM crawl_sessions ORDER BY created_at DESC LIMIT 1"
+    ).fetchone()
+    conn.close()
+
+    if not row:
+        return None
+
+    session = dict_from_row(row)
+
+    # 解析 JSON 字段
+    if session.get("ai_review"):
+        try:
+            session["ai_review"] = json.loads(session["ai_review"])
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    if session.get("sources"):
+        try:
+            session["sources"] = json.loads(session["sources"])
+        except (json.JSONDecodeError, TypeError):
+            pass
+
+    return session
