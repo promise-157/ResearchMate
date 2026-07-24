@@ -51,8 +51,18 @@ def health():
 # ---- 生产模式：serve 前端静态文件 ----
 import os
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from config import get as config_get
 
 frontend_dist = config_get("frontend", "dist_dir")
 if os.path.isdir(frontend_dist):
-    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
+    # 先挂载静态资源（JS/CSS/图片等），不加 html=True 避免拦截 API
+    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist, "assets")), name="assets")
+
+    # SPA fallback：所有非 API 的 GET 请求返回 index.html
+    @app.get("/{full_path:path}")
+    async def spa_fallback(full_path: str):
+        file_path = os.path.join(frontend_dist, full_path)
+        if os.path.isfile(file_path):
+            return FileResponse(file_path)
+        return FileResponse(os.path.join(frontend_dist, "index.html"))
