@@ -49,18 +49,32 @@
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import NavCard from '@/components/NavCard.vue'
 import { useCartStore } from '@/stores/cart'
+import { fetchStats } from '@/api'
 
 const cartStore = useCartStore()
 
-// TODO: 对接后端 fetchStats()
-const stats = computed(() => ({
+const stats = ref({
   paperCount: '--',
-  cartCount: cartStore.count || 0,
+  cartCount: 0,
   lastUpdate: '暂无',
-}))
+})
+
+onMounted(async () => {
+  try {
+    const res = await fetchStats()
+    const data = res.data || res
+    stats.value = {
+      paperCount: data.paper_count ?? '--',
+      cartCount: data.cart_count ?? cartStore.count,
+      lastUpdate: data.last_update || '暂无',
+    }
+  } catch {
+    stats.value.cartCount = cartStore.count
+  }
+})
 </script>
 
 <style scoped>

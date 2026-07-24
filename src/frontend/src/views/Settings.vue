@@ -90,13 +90,34 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { ElMessageBox, ElMessage } from 'element-plus'
 import ThemeSwitch from '@/components/ThemeSwitch.vue'
 import AIConfig from '@/components/AIConfig.vue'
 import CrawlConfig from '@/components/CrawlConfig.vue'
+import { fetchSettings } from '@/api'
+import { useSettingsStore } from '@/stores/settings'
 
+const settingsStore = useSettingsStore()
 const activeSection = ref('appearance')
+
+onMounted(async () => {
+  try {
+    const res = await fetchSettings()
+    const data = res.data || res
+    if (data.ai) {
+      settingsStore.aiConfig.apiType = data.ai.api_type
+      settingsStore.aiConfig.apiBaseUrl = data.ai.api_base_url
+      settingsStore.aiConfig.model = data.ai.model
+      // Don't override apiKey - it's not returned by server for security
+    }
+    if (data.crawl) {
+      settingsStore.crawlConfig.maxPapersPerSource = data.crawl.max_papers_per_source
+      settingsStore.crawlConfig.requestInterval = data.crawl.request_interval
+      settingsStore.crawlConfig.timeout = data.crawl.timeout
+    }
+  } catch { /* server may not be running */ }
+})
 
 async function confirmClearPapers() {
   try {

@@ -45,3 +45,13 @@ def on_startup():
 @app.get("/api/health")
 def health():
     return {"status": "ok"}
+
+
+# ---- 生产模式：serve 前端静态文件 ----
+import os
+from fastapi.staticfiles import StaticFiles
+from config import get as config_get
+
+frontend_dist = config_get("frontend", "dist_dir")
+if os.path.isdir(frontend_dist):
+    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
