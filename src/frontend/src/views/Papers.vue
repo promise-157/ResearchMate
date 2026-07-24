@@ -2,6 +2,11 @@
   <div class="papers-page">
     <h1 class="page-title">论文中心</h1>
 
+    <!-- API status indicator -->
+    <div v-if="apiStatus" class="api-status" :class="apiStatus">
+      {{ apiStatus === 'ok' ? '✓ 后端已连接' : '✗ 后端未连接 — 请确认 python run.py 已启动' }}
+    </div>
+
     <!-- Loading -->
     <div v-if="loading.journals" class="loading-state flex-center">
       <el-icon class="is-loading"><Loading /></el-icon>
@@ -84,8 +89,9 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
+import axios from 'axios'
 import CrawlControl from '@/components/CrawlControl.vue'
 import CrawlProgress from '@/components/CrawlProgress.vue'
 import AIReviewCard from '@/components/AIReviewCard.vue'
@@ -104,6 +110,7 @@ import {
 const cartStore = useCartStore()
 
 // ---- State ----
+const apiStatus = ref(null) // null=checking, 'ok', 'offline'
 const journalSources = ref([])
 const papers = ref([])
 const totalPapers = ref(0)
@@ -122,7 +129,13 @@ const loading = reactive({ journals: true, papers: false })
 let crawlPollTimer = null
 
 // ---- Lifecycle ----
-onMounted(() => {
+onMounted(async () => {
+  try {
+    await axios.get('/api/health')
+    apiStatus.value = 'ok'
+  } catch {
+    apiStatus.value = 'offline'
+  }
   loadJournals()
   loadPapers()
   loadLatestReview()
@@ -303,5 +316,22 @@ async function pollCrawlStatus() {
 
 .error-state {
   margin-top: var(--space-md);
+}
+
+.api-status {
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-sm);
+  margin-bottom: var(--space-md);
+}
+
+.api-status.ok {
+  background: var(--color-success-bg);
+  color: var(--color-success);
+}
+
+.api-status.offline {
+  background: var(--color-danger-bg);
+  color: var(--color-danger);
 }
 </style>
