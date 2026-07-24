@@ -103,15 +103,22 @@ defineEmits(['toggle-cart', 'view-detail'])
 const aiExpanded = ref(false)
 const maxTags = 3
 
+function parseTags(val) {
+  if (!val) return []
+  if (Array.isArray(val)) return val
+  try { return JSON.parse(val) } catch { return [] }
+}
+
 const displayedTags = computed(() => {
-  if (aiExpanded.value) return props.paper.ai_technologies
-  return props.paper.ai_technologies.slice(0, maxTags)
+  const tags = parseTags(props.paper.ai_technologies)
+  return aiExpanded.value ? tags : tags.slice(0, maxTags)
 })
 
 function formatAuthors(authors) {
-  if (!authors || authors.length === 0) return '未知作者'
-  if (authors.length === 1) return authors[0]
-  return authors[0] + ' et al.'
+  const arr = parseTags(authors)  // same JSON-or-array logic
+  if (!arr || arr.length === 0) return '未知作者'
+  if (arr.length === 1) return arr[0]
+  return arr[0] + ' et al.'
 }
 
 function formatCodeUrl(url) {
