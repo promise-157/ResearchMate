@@ -39,6 +39,7 @@ memory/
 config/local.yaml
 logs/
 *.log
+src/temp/
 
 # === Data (keep structure, ignore contents) ===
 src/data/*
