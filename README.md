@@ -134,11 +134,12 @@ ResearchMate 是一个 AI 辅助论文筛选工具。导入你感兴趣的期刊
    ```sh
    cd src/frontend
    npm install
+   cd ../..
    ```
 
-4. 配置 AI API Key
-   - 启动程序后在「全局设置 → AI 配置」页面填写 API Key
-   - 支持 OpenAI、Claude、Ollama 本地模型
+4. 配置 AI API Key（可选，不配置也能爬取和浏览）
+   - 启动后在「全局设置 → AI 配置」填写 API Key
+   - 支持 OpenAI、Claude、DeepSeek、Ollama 本地模型
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 
@@ -147,17 +148,14 @@ ResearchMate 是一个 AI 辅助论文筛选工具。导入你感兴趣的期刊
 <!-- USAGE EXAMPLES -->
 ## Usage
 
-启动后端（自动打开浏览器）：
 ```sh
 cd src/backend
+conda activate researchmate
 python run.py
-```
+# 首次自动构建前端 → 浏览器打开 → 开始使用
 
-仅启动前端开发服务器（调试 UI 用）：
-```sh
-cd src/frontend
-npm run dev
-# 浏览器打开 http://localhost:5173
+# 开发模式（前端热更新）
+python run.py --dev
 ```
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
@@ -182,14 +180,14 @@ npm run dev
 - [x] 项目目录结构设计
 - [x] 前端骨架搭建 (Vue3 + Vite + Router + Pinia)
 - [x] CSS 设计系统 (变量 + 主题切换)
-- [x] 首页导航
-- [ ] 论文中心页面 (期刊源管理 + 爬取 + AI 分析结果)
-- [ ] 全局设置页面 (主题 / AI 配置 / 爬取参数)
-- [ ] 后端 API (FastAPI + SQLite)
-- [ ] 爬虫模块 (通用网页 + arXiv 专用)
-- [ ] AI 分析模块 (单篇分析 + 批量点评)
-- [ ] 购物车导出功能
-- [ ] 数据分析可视化
+- [x] V1 全部完成：前端4页面 + 后端API + 爬虫 + AI分析
+- [ ] V2.1 工作区系统（多 DB 文件管理）
+- [ ] V2.2 关键词自动提取（无 AI，本地运行）
+- [ ] V2.3 关键词筛选器 UI
+- [ ] V2.4 爬取增强（关键词搜索 + 排序）
+- [ ] V2.5 工作区 AI 点评（基于关键词分组）
+- [ ] V2.6 购物车 AI 深度分析（单篇/批量）
+- [ ] V2.7 工作区导入导出
 
 See the [open issues](https://github.com/promise-157/ResearchMate/issues) for a full list of proposed features.
 

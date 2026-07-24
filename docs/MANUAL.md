@@ -90,22 +90,16 @@ cd ../..
 
 ## 3. 启动
 
-### 方式一：完整启动（后端 + 前端，推荐）
+一个命令，首次自动构建前端：
 
-后端开发完成后：
 ```bash
-conda activate researchmate
 cd src/backend
+conda activate researchmate
 python run.py
 # 浏览器自动打开 → 看到首页
-```
 
-### 方式二：仅前端开发服务器（调试 UI，不需要后端）
-
-```bash
-cd src/frontend
-npm run dev
-# 浏览器打开 http://localhost:5173
+# 开发模式（前端热更新）
+python run.py --dev
 ```
 
 ### 方式三：构建生产版本
@@ -269,6 +263,14 @@ API 类型: Claude
 API Key:  sk-ant-xxxxxxxxxxxxxxxxxxxx
 Base URL: https://api.anthropic.com
 模型:     claude-sonnet-5 或 claude-haiku-4-5-20251001（省成本）
+```
+
+### DeepSeek
+```
+API 类型: DeepSeek
+API Key:  sk-xxxxxxxxxxxxxxxx
+Base URL: https://api.deepseek.com/v1
+模型:     deepseek-chat
 ```
 
 ### Ollama（本地模型，免费）
