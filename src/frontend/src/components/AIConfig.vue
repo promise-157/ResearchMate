@@ -2,9 +2,10 @@
   <div class="ai-config">
     <el-form label-position="top" size="default">
       <el-form-item label="API 类型">
-        <el-select v-model="settings.aiConfig.apiType" style="width:100%">
+        <el-select v-model="settings.aiConfig.apiType" style="width:100%" @change="onTypeChange">
           <el-option label="OpenAI" value="openai" />
           <el-option label="Claude (Anthropic)" value="claude" />
+          <el-option label="DeepSeek" value="deepseek" />
           <el-option label="Ollama (本地)" value="ollama" />
           <el-option label="自定义兼容接口" value="custom" />
         </el-select>
@@ -24,11 +25,11 @@
       </el-form-item>
 
       <el-form-item label="API Base URL">
-        <el-input v-model="settings.aiConfig.apiBaseUrl" placeholder="https://api.openai.com/v1" />
+        <el-input v-model="settings.aiConfig.apiBaseUrl" />
       </el-form-item>
 
       <el-form-item label="模型名称">
-        <el-input v-model="settings.aiConfig.model" placeholder="gpt-4o" />
+        <el-input v-model="settings.aiConfig.model" />
       </el-form-item>
 
       <el-form-item>
@@ -63,6 +64,22 @@ import { useSettingsStore } from '@/stores/settings'
 const settings = useSettingsStore()
 
 const apiKeyInput = ref(settings.aiConfig.apiKey)
+
+const PRESETS = {
+  openai:   { baseUrl: 'https://api.openai.com/v1',   model: 'gpt-4o' },
+  claude:   { baseUrl: 'https://api.anthropic.com',    model: 'claude-sonnet-5' },
+  deepseek: { baseUrl: 'https://api.deepseek.com/v1',  model: 'deepseek-chat' },
+  ollama:   { baseUrl: 'http://localhost:11434/v1',    model: 'llama3.1:8b' },
+  custom:   { baseUrl: '', model: '' },
+}
+
+function onTypeChange(type) {
+  const preset = PRESETS[type]
+  if (preset) {
+    settings.aiConfig.apiBaseUrl = preset.baseUrl
+    settings.aiConfig.model = preset.model
+  }
+}
 
 const defaultPrompt = `你是一个论文评审助手。阅读以下论文摘要，用中文回答：
 1. 这篇论文是否提到了开源代码或 GitHub 链接？如有请提取 URL

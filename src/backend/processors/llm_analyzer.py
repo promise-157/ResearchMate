@@ -62,10 +62,8 @@ class LLMAnalyzer(BaseProcessor):
         # 构建 chat/completions URL
         if api_type == "claude":
             url = f"{base_url}/v1/messages"
-        elif api_type == "ollama":
-            url = f"{base_url}/chat/completions"
         else:
-            # OpenAI 及自定义兼容接口
+            # OpenAI / DeepSeek / Ollama / 自定义 — 全部 OpenAI 兼容
             url = f"{base_url}/chat/completions"
 
         return {

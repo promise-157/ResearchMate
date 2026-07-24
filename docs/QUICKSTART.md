@@ -19,13 +19,7 @@ cd src/backend && pip install -r requirements.txt && cd ../..
 cd src/frontend && npm install && cd ../..
 ```
 
-## 2. 构建前端（一次性）
-
-```bash
-cd src/frontend && npm run build && cd ../..
-```
-
-## 3. 启动
+## 2. 启动（一个命令）
 
 ```bash
 cd src/backend
@@ -33,7 +27,13 @@ conda activate researchmate
 python run.py
 ```
 
-浏览器自动打开 → 看到 ResearchMate 首页。
+首次运行会自动构建前端。浏览器自动打开 → 看到首页。
+
+开发模式（前端热更新）：
+```bash
+python run.py --dev
+# 浏览器打开 http://127.0.0.1:5173
+```
 
 ## 4. 添加期刊源
 
@@ -65,6 +65,14 @@ AI 分析需要配置 API Key。三种方式：
 ```bash
 export RESEARCHMATE_AI_KEY="sk-your-key"
 export RESEARCHMATE_AI_MODEL="gpt-4o-mini"
+python run.py
+```
+
+### DeepSeek
+```bash
+export RESEARCHMATE_AI_TYPE="deepseek"
+export RESEARCHMATE_AI_KEY="sk-your-deepseek-key"
+export RESEARCHMATE_AI_MODEL="deepseek-chat"
 python run.py
 ```
 
