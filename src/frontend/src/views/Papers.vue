@@ -2,82 +2,57 @@
   <div class="papers-page">
     <h1 class="page-title">论文中心</h1>
 
-    <!-- API status indicator -->
-    <div v-if="apiStatus" class="api-status" :class="apiStatus">
-      {{ apiStatus === 'ok' ? '✓ 后端已连接' : '✗ 后端未连接 — 请确认 python run.py 已启动' }}
+    <!-- Content -->
+    <CrawlProgress
+      :status="crawlStatus"
+      :percentage="crawlPercentage"
+      :message="crawlMessage"
+    />
+
+    <CrawlControl
+      :sources="journalSources"
+      @add-source="showAddDialog = true"
+      @delete-source="handleDeleteSource"
+      @crawl-start="handleCrawlStart"
+    />
+
+    <AIReviewCard :review="aiReview" />
+
+    <PaperFilterBar @filter-change="handleFilter" />
+
+    <!-- Paper list: show empty only when done loading and truly empty -->
+    <div v-if="!loading.papers && papers.length === 0" class="empty-state">
+      <div class="empty-state-icon">📄</div>
+      <p>暂无论文数据</p>
+      <p class="text-small text-secondary">添加期刊源后点击爬取按钮</p>
     </div>
 
-    <!-- DEBUG: data flow trace -->
-    <div v-if="debugInfo" class="debug-panel">
-      <div v-for="(line, i) in debugInfo" :key="i" class="debug-line">{{ line }}</div>
-    </div>
-
-    <!-- Loading -->
-    <div v-if="loading.journals" class="loading-state flex-center">
-      <el-icon class="is-loading"><Loading /></el-icon>
-      <span>加载中...</span>
-    </div>
-
-    <template v-else>
-      <!-- Progress -->
-      <CrawlProgress
-        :status="crawlStatus"
-        :percentage="crawlPercentage"
-        :message="crawlMessage"
+    <div v-if="papers.length > 0" class="paper-list">
+      <PaperCard
+        v-for="paper in papers"
+        :key="paper.id"
+        :paper="paper"
+        @toggle-cart="handleToggleCart(paper)"
+        @view-detail="openDetail(paper)"
       />
+    </div>
 
-      <!-- Area 1: Crawl Control -->
-      <CrawlControl
-        :sources="journalSources"
-        @add-source="showAddDialog = true"
-        @delete-source="handleDeleteSource"
-        @crawl-start="handleCrawlStart"
+    <!-- Pagination -->
+    <div v-if="totalPapers > pageSize" class="pagination-row flex-center">
+      <el-pagination
+        :current-page="page"
+        :page-size="pageSize"
+        :total="totalPapers"
+        layout="prev, pager, next"
+        small
+        @current-change="loadPapers"
       />
+    </div>
 
-      <!-- Area 2: AI Review -->
-      <AIReviewCard :review="aiReview" />
-
-      <!-- Area 3: Filter + Paper List -->
-      <PaperFilterBar @filter-change="handleFilter" />
-
-      <div v-if="loading.papers" class="loading-state flex-center">
-        <el-icon class="is-loading"><Loading /></el-icon>
-        <span>加载论文...</span>
-      </div>
-
-      <div v-else-if="papers.length === 0" class="empty-state">
-        <div class="empty-state-icon">📄</div>
-        <p>暂无论文数据</p>
-        <p class="text-small text-secondary">添加期刊源后点击爬取按钮</p>
-      </div>
-
-      <TransitionGroup v-else name="fade" tag="div">
-        <PaperCard
-          v-for="paper in papers"
-          :key="paper.id"
-          :paper="paper"
-          @toggle-cart="handleToggleCart(paper)"
-          @view-detail="openDetail(paper)"
-        />
-      </TransitionGroup>
-
-      <!-- Pagination -->
-      <div v-if="totalPapers > pageSize" class="pagination-row flex-center">
-        <el-pagination
-          :current-page="page"
-          :page-size="pageSize"
-          :total="totalPapers"
-          layout="prev, pager, next"
-          small
-          @current-change="loadPapers"
-        />
-      </div>
-
-      <!-- Crawl error -->
-      <div v-if="error" class="error-state">
-        <el-alert :title="error" type="error" show-icon :closable="false" />
-      </div>
-    </template>
+    <!-- Crawl error -->
+    <div v-if="error" class="error-state">
+      <el-alert :title="error" type="error" show-icon :closable="false" />
+    </div>
 
     <!-- Dialogs -->
     <AddSourceDialog
@@ -96,7 +71,6 @@
 <script setup>
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import axios from 'axios'
 import CrawlControl from '@/components/CrawlControl.vue'
 import CrawlProgress from '@/components/CrawlProgress.vue'
 import AIReviewCard from '@/components/AIReviewCard.vue'
@@ -115,8 +89,6 @@ import {
 const cartStore = useCartStore()
 
 // ---- State ----
-const apiStatus = ref(null) // null=checking, 'ok', 'offline'
-const debugInfo = ref([])   // TEMP: trace data flow
 const journalSources = ref([])
 const papers = ref([])
 const totalPapers = ref(0)
@@ -135,13 +107,7 @@ const loading = reactive({ journals: true, papers: false })
 let crawlPollTimer = null
 
 // ---- Lifecycle ----
-onMounted(async () => {
-  try {
-    await axios.get('/api/health')
-    apiStatus.value = 'ok'
-  } catch {
-    apiStatus.value = 'offline'
-  }
+onMounted(() => {
   loadJournals()
   loadPapers()
   loadLatestReview()
@@ -162,9 +128,7 @@ async function loadJournals() {
 
 async function loadPapers() {
   loading.papers = true
-  const log = []
   try {
-    log.push(`1. 发起请求 GET /api/papers?page=1&page_size=20`)
     const res = await fetchPapers({
       q: filters.value.search || undefined,
       has_code: filters.value.hasCode || undefined,
@@ -173,19 +137,13 @@ async function loadPapers() {
       page: page.value,
       page_size: pageSize,
     })
-    log.push(`2. 收到响应 typeof=${typeof res} keys=${Object.keys(res || {}).join(',')}`)
     const data = res.data || res
-    log.push(`3. data typeof=${typeof data} keys=${Object.keys(data || {}).join(',')}`)
-    log.push(`4. data.total=${data.total} data.items?.length=${data.items?.length}`)
     papers.value = data.items || []
     totalPapers.value = data.total || 0
-    log.push(`5. papers.value.length=${papers.value.length} totalPapers=${totalPapers.value}`)
   } catch (e) {
-    log.push(`ERR: ${e.message || e}`)
     error.value = '加载论文失败'
   } finally {
     loading.papers = false
-    debugInfo.value = log
   }
 }
 
