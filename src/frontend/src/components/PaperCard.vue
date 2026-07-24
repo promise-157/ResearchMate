@@ -68,10 +68,10 @@
             <el-tag size="small" type="info">{{ tag }}</el-tag>
           </template>
           <span
-            v-if="paper.ai_technologies.length > maxTags && !aiExpanded"
+            v-if="totalTagCount > maxTags && !aiExpanded"
             class="more-tags"
           >
-            +{{ paper.ai_technologies.length - maxTags }} 更多
+            +{{ totalTagCount - maxTags }} 更多
           </span>
         </div>
       </div>
@@ -108,6 +108,8 @@ function parseTags(val) {
   if (Array.isArray(val)) return val
   try { return JSON.parse(val) } catch { return [] }
 }
+
+const totalTagCount = computed(() => parseTags(props.paper.ai_technologies).length)
 
 const displayedTags = computed(() => {
   const tags = parseTags(props.paper.ai_technologies)
