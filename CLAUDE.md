@@ -48,40 +48,42 @@ conda activate researchmate
 | HTTP 代理 | `http://127.0.0.1:7890` |
 | Gazebo/PX4 | 多个相关环境变量 |
 
-### 代理与网络限制
+### 代理与终端限制
 
-用户的 `~/.gitconfig` 配置了 `http.proxy = http://127.0.0.1:7890`（Clash/v2ray）。**Claude Code 的 Bash 工具运行在 VS Code 扩展的非交互式子进程中，可能无法访问该代理**，表现为 `git push`/`git pull`/`curl` 失败并报 `No such device or address`。
+用户的 `~/.gitconfig` 配置了 `http.proxy = http://127.0.0.1:7890`（Clash/v2ray），Bash 工具环境也能访问。但 **Claude Code 的 Bash 工具没有 TTY（交互式终端）**，任何需要交互输入的命令（如 `git push` 弹出认证提示）都会失败。
 
-- **git push/pull 等网络操作尽量让用户在终端里手动执行**，不要在 Bash 工具中执行
-- 用户在终端里 `git push` 可以正常走代理，无需额外认证
-- 如果需要在工具中验证网络，先确认代理可达，或使用 `--noproxy '*'` 绕过代理尝试直连
+- **`git push`/`git pull` 由用户在终端手动执行**，Bash 工具不要尝试
+- 如果 Bash 命令因 TTY 失败，直接告诉用户去终端执行，**禁止绕道/折腾**
+- 网络验证用 `curl`/`timeout bash` 等非交互方式确认即可
 
 ---
 
-## 关键安全规则
+## 铁律（违反这些比写 bug 更严重）
 
-### 1. 绝对不要随意回退版本
+### 1. 永远不要碰凭证和认证配置
+- **禁止写入、修改、创建任何包含 token、密码、密钥的文件**（包括 `/tmp/`、项目内、任何位置）
+- **禁止修改 `git remote`、`~/.gitconfig`、`~/.ssh/`、git credential 相关配置**
+- **禁止使用 `$GITHUB_TOKEN` 或其他凭证环境变量** — 那是敏感信息
+- 如果 git push/pull 失败，一句话告诉用户：**"终端里跑 `git push`，别让我碰。"**
 
-**如果没有 commit，回退（`git reset --hard`、`git checkout --`、删除文件等）会导致修改永久丢失，无法恢复。**
+### 2. 不要无谓折腾已确认的环境问题
+- 用户已经说了他的终端能正常 work → **信他，别修**
+- Bash 工具有本质限制（非交互式），承认限制，不要找 workaround
+- 不要在同一个问题上尝试超过 2 次命令
 
-- 做任何破坏性操作前，先 `git stash` 或 `git commit` 保存当前状态
-- 如果要回退已 commit 的版本，先确认用户知道后果
-- 不要使用 `git push --force` 除非用户明确要求
-
-### 2. 敏感操作必须确认
-
-以下操作**必须经过用户明确确认**才能执行：
+### 3. 危险操作必须确认
 - `git push --force` / `git push --force-with-lease`
 - `rm -rf` 删除非临时文件/目录
-- 修改 `.gitignore` 外的 `.git` 相关配置
 - 修改 `~/.bashrc`、`~/.profile` 等系统配置文件
-- 操作 `/home/promise/` 下非本项目目录的文件
-- `conda install`、`pip install` 安装大型包（>100MB）
+- 操作本项目外的文件
 
-### 3. 数据安全
+### 4. 绝对不要随意回退版本
+- 没有 commit 的修改，回退（`git reset --hard`、`git checkout --`、删除）**永久丢失**
+- 破坏性操作前先 `git stash` 或让用户 commit
 
-- `src/data/` 目录存放爬取的数据，已加入 `.gitignore`，不要手动删除
-- `src/temp/` 目录存放设计文档和临时笔记，可以修改但不要删除整个目录
+### 5. 数据安全
+- `src/data/` 已 gitignored，勿删
+- `src/temp/` 可修改但勿删目录
 
 ---
 
