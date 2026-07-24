@@ -50,6 +50,7 @@
       </ul>
     </li>
     <li><a href="#usage">Usage</a></li>
+    <li><a href="#documentation">Documentation</a></li>
     <li><a href="#roadmap">Roadmap</a></li>
     <li><a href="#contributing">Contributing</a></li>
     <li><a href="#license">License</a></li>
@@ -146,6 +147,15 @@ cd src/frontend
 npm run dev
 # 浏览器打开 http://localhost:5173
 ```
+
+<p align="right">(<a href="#readme-top">back to top</a>)</p>
+
+
+
+<!-- DOCUMENTATION -->
+## Documentation
+
+详细使用说明请参阅 [使用手册](docs/MANUAL.md)。
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
 

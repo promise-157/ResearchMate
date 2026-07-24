@@ -30,6 +30,11 @@
             <el-icon><Link /></el-icon> GitHub
           </el-button>
         </a>
+        <a href="https://github.com/promise-157/ResearchMate/blob/main/docs/MANUAL.md" target="_blank">
+          <el-button type="primary" link>
+            <el-icon><Document /></el-icon> 使用手册
+          </el-button>
+        </a>
       </div>
     </div>
   </div>
