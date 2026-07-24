@@ -120,6 +120,7 @@ async def _do_crawl(source_ids: list, mode: str):
         _status["message"] = "爬取完成，开始 AI 分析..."
 
         # ---- AI 分析 ----
+        ai_review = None
         if all_new_papers:
             from processors.registry import get as get_processor
 
@@ -135,7 +136,7 @@ async def _do_crawl(source_ids: list, mode: str):
                     except Exception as e:
                         print(f"[ai] analyze error: {e}")
                         result = {"has_code": False, "code_url": None, "innovation": None,
-                                  "technologies": "[]", "analyzed": True}
+                                  "technologies": "[]", "analyzed": False}
 
                     # 只有分析成功才更新
                     if not result.get("analyzed"):
@@ -163,14 +164,11 @@ async def _do_crawl(source_ids: list, mode: str):
                     )
                     conn.commit()
 
-                    # 请求间隔（分析时也适当等待）
                     await asyncio.sleep(0.5)
 
                 _status["percentage"] = 90
                 _status["message"] = "AI 批量点评..."
 
-                # 批量点评
-                ai_review = None
                 try:
                     ai_review = await analyzer.review(all_new_papers)
                 except Exception as e:
