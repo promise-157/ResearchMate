@@ -48,6 +48,14 @@ conda activate researchmate
 | HTTP 代理 | `http://127.0.0.1:7890` |
 | Gazebo/PX4 | 多个相关环境变量 |
 
+### 代理与网络限制
+
+用户的 `~/.gitconfig` 配置了 `http.proxy = http://127.0.0.1:7890`（Clash/v2ray）。**Claude Code 的 Bash 工具运行在 VS Code 扩展的非交互式子进程中，可能无法访问该代理**，表现为 `git push`/`git pull`/`curl` 失败并报 `No such device or address`。
+
+- **git push/pull 等网络操作尽量让用户在终端里手动执行**，不要在 Bash 工具中执行
+- 用户在终端里 `git push` 可以正常走代理，无需额外认证
+- 如果需要在工具中验证网络，先确认代理可达，或使用 `--noproxy '*'` 绕过代理尝试直连
+
 ---
 
 ## 关键安全规则
