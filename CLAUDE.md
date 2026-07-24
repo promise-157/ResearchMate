@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code when working in this repository.
 
+**⚠️ 每次新会话开始，先读 `src/temp/task-plan.md` 了解当前进度。不要重复已完成的任务。**
+
 ---
 
 ## Python 环境 (Miniconda)
