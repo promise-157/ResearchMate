@@ -180,14 +180,8 @@ python run.py --dev
 - [x] 项目目录结构设计
 - [x] 前端骨架搭建 (Vue3 + Vite + Router + Pinia)
 - [x] CSS 设计系统 (变量 + 主题切换)
-- [x] V1 全部完成：前端4页面 + 后端API + 爬虫 + AI分析
-- [ ] V2.1 工作区系统（多 DB 文件管理）
-- [ ] V2.2 关键词自动提取（无 AI，本地运行）
-- [ ] V2.3 关键词筛选器 UI
-- [ ] V2.4 爬取增强（关键词搜索 + 排序）
-- [ ] V2.5 工作区 AI 点评（基于关键词分组）
-- [ ] V2.6 购物车 AI 深度分析（单篇/批量）
-- [ ] V2.7 工作区导入导出
+- [x] V1: 前端4页面 + 后端API + 爬虫 + AI分析
+- [x] V2: 工作区系统 + 关键词提取 + 筛选器 + 爬取增强 + AI点评 + AI购物车 + 导入导出
 
 See the [open issues](https://github.com/promise-157/ResearchMate/issues) for a full list of proposed features.
 
