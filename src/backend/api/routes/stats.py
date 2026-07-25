@@ -16,7 +16,7 @@ def get_stats():
     cart_count = conn.execute("SELECT COUNT(*) FROM papers WHERE in_cart = 1").fetchone()[0]
 
     last_session = conn.execute(
-        "SELECT created_at FROM crawl_sessions ORDER BY created_at DESC LIMIT 1"
+        "SELECT created_at FROM crawl_tasks ORDER BY created_at DESC LIMIT 1"
     ).fetchone()
 
     conn.close()
@@ -49,9 +49,9 @@ def get_latest_session():
         except (json.JSONDecodeError, TypeError):
             pass
 
-    if session.get("sources"):
+    if session.get("task_ids"):
         try:
-            session["sources"] = json.loads(session["sources"])
+            session["task_ids"] = json.loads(session["task_ids"])
         except (json.JSONDecodeError, TypeError):
             pass
 
