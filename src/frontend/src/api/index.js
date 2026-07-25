@@ -113,3 +113,15 @@ export function clearWorkspace() {
 export function triggerWorkspaceReview() {
   return api.post('/workspace/review')
 }
+
+export function getExportUrl() {
+  return '/api/workspace/export'
+}
+
+export function importWorkspace(file) {
+  const form = new FormData()
+  form.append('file', file)
+  return api.post('/workspace/import', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}

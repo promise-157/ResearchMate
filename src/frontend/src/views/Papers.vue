@@ -17,7 +17,7 @@
     </div>
 
     <!-- Workspace dialog -->
-    <el-dialog v-model="showWsDialog" title="切换工作区" width="480px">
+    <el-dialog v-model="showWsDialog" title="切换工作区" width="520px">
       <div v-if="wsList.length === 0" style="color:#999;text-align:center;padding:20px">暂无工作区</div>
       <div v-for="ws in wsList" :key="ws.id" class="ws-item"
            :class="{ active: ws.db_path === currentWsPath }"
@@ -29,6 +29,16 @@
         <el-button v-if="ws.db_path !== currentWsPath" size="small" type="primary" plain>加载</el-button>
         <el-tag v-else size="small" type="success">当前</el-tag>
       </div>
+      <template #footer>
+        <div class="ws-dialog-footer">
+          <div>
+            <el-button size="small" @click="handleExportWs">📤 导出当前工作区</el-button>
+            <el-button size="small" @click="handleImportWs">📥 导入工作区</el-button>
+          </div>
+          <input ref="importInput" type="file" accept=".db" style="display:none" @change="onImportFile" />
+          <el-button @click="showWsDialog = false">关闭</el-button>
+        </div>
+      </template>
     </el-dialog>
 
     <!-- Content -->
@@ -126,13 +136,14 @@ import {
   fetchPapers, updatePaper,
   fetchLatestSession, fetchStats,
   fetchWorkspaces, createWorkspace, loadWorkspace, clearWorkspace,
-  fetchKeywords, triggerWorkspaceReview,
+  fetchKeywords, triggerWorkspaceReview, getExportUrl, importWorkspace,
 } from '@/api'
 
 const cartStore = useCartStore()
 
 // ---- Workspace ----
 const showWsDialog = ref(false)
+const importInput = ref(null)
 const wsName = ref('default')
 const currentWsPath = ref('')
 const wsList = ref([])
@@ -193,6 +204,34 @@ async function handleWorkspaceReview() {
     reviewStatus.value = '生成失败（请确认已配置 AI Key）'
     reviewLoading.value = false
   }
+}
+
+function handleExportWs() {
+  window.open(getExportUrl(), '_blank')
+}
+
+function handleImportWs() {
+  importInput.value?.click()
+}
+
+async function onImportFile(e) {
+  const file = e.target.files?.[0]
+  if (!file) return
+  try {
+    const res = await importWorkspace(file)
+    const data = res.data || res
+    currentWsPath.value = data.db_path
+    wsName.value = data.name
+    showWsDialog.value = false
+    papers.value = []
+    totalPapers.value = 0
+    await loadWorkspaces()
+    loadPapers()
+    loadJournals()
+    loadKeywords()
+    ElMessage.success(`已导入: ${data.name}`)
+  } catch { ElMessage.error('导入失败') }
+  e.target.value = ''
 }
 
 async function handleClearWorkspace() {
@@ -484,4 +523,6 @@ async function pollCrawlStatus() {
 
 .review-trigger { display: flex; align-items: center; gap: var(--space-sm); margin-bottom: var(--space-md); }
 .review-status { font-size: var(--font-size-xs); color: var(--color-text-secondary); }
+
+.ws-dialog-footer { display: flex; justify-content: space-between; align-items: center; width: 100%; }
 </style>

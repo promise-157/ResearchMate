@@ -2,11 +2,13 @@
 import os
 import json as _json
 import asyncio
+import shutil
 import threading
 import traceback
 from collections import Counter
 from datetime import datetime
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi.responses import FileResponse
 from storage.database import get_connection as get_main_conn, dict_from_row
 from storage.workspace import (
     get_active_path, switch_workspace, create_workspace,
@@ -101,6 +103,49 @@ def delete_workspace_api(workspace_id: int):
 
     delete_workspace_file(db_path)
     return {"ok": True}
+
+
+@router.get("/workspace/export")
+def export_workspace():
+    """下载当前工作区 DB 文件。"""
+    db_path = get_active_path()
+    if not os.path.isfile(db_path):
+        raise HTTPException(status_code=404, detail="工作区文件不存在")
+    name = os.path.basename(db_path)
+    return FileResponse(db_path, media_type="application/octet-stream", filename=name)
+
+
+@router.post("/workspace/import")
+async def import_workspace(file: UploadFile = File(...)):
+    """上传工作区 DB 文件并加载。"""
+    if not file.filename or not file.filename.endswith(".db"):
+        raise HTTPException(status_code=400, detail="请上传 .db 文件")
+
+    _ensure_dir_ws()
+    safe_name = file.filename.replace(" ", "_").replace("/", "_")
+    dest = os.path.join(str(WORKSPACE_DIR), safe_name)
+
+    with open(dest, "wb") as f:
+        shutil.copyfileobj(file.file, f)
+
+    # 注册到主DB
+    display_name = safe_name.replace(".db", "")
+    conn = get_main_conn()
+    existing = conn.execute("SELECT id FROM workspaces WHERE db_path = ?", (dest,)).fetchone()
+    if not existing:
+        conn.execute(
+            "INSERT INTO workspaces (name, db_path) VALUES (?, ?)",
+            (display_name, dest),
+        )
+    conn.commit()
+    conn.close()
+
+    switch_workspace(dest)
+    return {"ok": True, "name": display_name, "db_path": dest}
+
+
+def _ensure_dir_ws():
+    WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
 
 
 @router.post("/workspaces/current/clear")
