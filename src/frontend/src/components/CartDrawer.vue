@@ -40,6 +40,8 @@
         </div>
       </div>
 
+      <PromptEditor v-model="cartPrompt" :presets="cartPresets" data-scope="购物车论文全文摘要 + 标题" storage-key="rm-cart-prompts" />
+
       <div class="cart-actions">
         <el-button @click="copyTitles">复制标题列表</el-button>
         <el-button type="primary" @click="exportCSV">导出 CSV</el-button>
@@ -51,6 +53,7 @@
 <script setup>
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
+import PromptEditor from '@/components/PromptEditor.vue'
 import { useCartStore } from '@/stores/cart'
 import { analyzeCartPapers, analyzeAllCart } from '@/api'
 
@@ -59,6 +62,12 @@ defineEmits(['update:visible'])
 
 const cartStore = useCartStore()
 const analyzing = ref(false)
+const cartPrompt = ref('')
+const cartPresets = [
+  { label: '默认：标准分析', template: '' },
+  { label: '简洁：仅代码+创新', template: '分析以下论文，用中文返回JSON：{"has_code":true/false,"code_url":"链接或null","innovation":"一句话创新点（20-50字）","technologies":["技术1","技术2"]}\n\n标题: {title}\n摘要: {abstract}' },
+  { label: '详细：加评价', template: '分析以下论文，用中文返回JSON：{"has_code":true/false,"code_url":"链接或null","innovation":"创新点","technologies":["技术1"],"evaluation":"一句话评价这篇文章的实用价值"}\n\n标题: {title}\n摘要: {abstract}' },
+]
 
 function parseTags(val) {
   if (!val) return []

@@ -165,11 +165,17 @@ def clear_current_workspace():
     return {"ok": True}
 
 
+from pydantic import BaseModel
+
+class ReviewRequest(BaseModel):
+    prompt: str = ""
+
 @router.post("/workspace/review")
-async def trigger_workspace_review():
+async def trigger_workspace_review(body: ReviewRequest = ReviewRequest()):
     """生成工作区 AI 点评（同步等待，返回结果或错误）。"""
     from processors.registry import get as get_processor
     from config import get as config_get
+    custom_prompt = (body.prompt or "").strip()
 
     api_type = config_get("ai", "api_type") or "openai"
     api_key = config_get("ai", "api_key")
@@ -210,8 +216,13 @@ async def trigger_workspace_review():
     top_kw = counter.most_common(20)
     kw_summary = ", ".join(f"{k}({c})" for k, c in top_kw[:15])
     title_sample = [p["title"][:100] for p in papers_list[:20]]
+    titles_text = "\n".join(f"{i+1}. {t}" for i, t in enumerate(title_sample))
 
-    prompt = f"""你是一个学术会议领域主席。请基于以下信息撰写简短综述。
+    # 自定义 prompt 或默认
+    if custom_prompt:
+        prompt = custom_prompt.replace("{keywords}", kw_summary).replace("{titles}", titles_text)
+    else:
+        prompt = f"""你是一个学术会议领域主席。请基于以下信息撰写简短综述。
 
 关键词频率: {kw_summary}
 

@@ -30,6 +30,7 @@
       <span v-if="reviewStatus" class="review-status" :class="{ 'review-error': reviewStatus.includes('失败') }">{{ reviewStatus }}</span>
       <span v-else-if="aiSettingsHint" class="review-status">{{ aiSettingsHint }}</span>
     </div>
+    <PromptEditor v-model="reviewPrompt" :presets="reviewPresets" data-scope="工作区全部论文标题 + 关键词频次统计" storage-key="rm-review-prompts" />
     <AIReviewCard :review="aiReview" />
 
     <PaperFilterBar @filter-change="handleFilter" />
@@ -94,6 +95,7 @@ import CrawlControl from '@/components/CrawlControl.vue'
 import CrawlProgress from '@/components/CrawlProgress.vue'
 import AIReviewCard from '@/components/AIReviewCard.vue'
 import WorkspaceManager from '@/components/WorkspaceManager.vue'
+import PromptEditor from '@/components/PromptEditor.vue'
 import PaperFilterBar from '@/components/PaperFilterBar.vue'
 import KeywordFilter from '@/components/KeywordFilter.vue'
 import PaperCard from '@/components/PaperCard.vue'
@@ -116,7 +118,7 @@ async function handleWorkspaceReview() {
   reviewLoading.value = true
   reviewStatus.value = 'AI 分析中，请稍候...'
   try {
-    const res = await triggerWorkspaceReview()
+    const res = await triggerWorkspaceReview(reviewPrompt.value || undefined)
     const data = res.data || res
     if (!data.ok) {
       reviewStatus.value = `失败: ${data.error}`
@@ -173,6 +175,12 @@ const showDetail = ref(false)
 const selectedPaper = ref(null)
 const reviewLoading = ref(false)
 const reviewStatus = ref('')
+const reviewPrompt = ref('')
+const reviewPresets = [
+  { label: '默认：关键词+标题综述', template: '' },
+  { label: '简洁版：仅推荐关注', template: '你是一个学术会议领域主席。请阅读以下论文标题和关键词统计，推荐5篇最值得关注的论文，每篇用一句话说明理由。\n\n关键词频率: {keywords}\n\n论文标题:\n{titles}\n\n返回JSON: {"recommendations": [{"title": "...", "reason": "..."}]}' },
+  { label: '详细版：完整综述', template: '你是一个学术论文评审专家。请基于以下信息撰写详细综述，包含：1.热门研究方向 2.推荐论文及理由 3.技术趋势 4.研究空白/未来方向\n\n关键词频率: {keywords}\n\n论文标题:\n{titles}\n\n返回JSON格式。' },
+]
 const aiSettingsHint = computed(() => {
   const s = useSettingsStore()
   if (!s.aiConfig._hasKey) return '提示：前往全局设置配置 AI Key'

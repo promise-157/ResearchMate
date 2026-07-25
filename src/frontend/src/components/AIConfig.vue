@@ -56,15 +56,6 @@
       </el-form-item>
     </el-form>
 
-    <!-- Prompt Template -->
-    <el-collapse>
-      <el-collapse-item title="分析 Prompt 模板（高级）" name="prompt">
-        <el-input v-model="promptTemplate" type="textarea" :rows="10" />
-        <div style="margin-top:8px">
-          <el-button size="small" text @click="resetPrompt">恢复默认</el-button>
-        </div>
-      </el-collapse-item>
-    </el-collapse>
   </div>
 </template>
 
@@ -183,17 +174,6 @@ function testConnection() {
   saveToBackend()
   fetchModels()
 }
-
-const defaultPrompt = `你是一个论文评审助手。阅读以下论文摘要，用中文回答：
-1. 这篇论文是否提到了开源代码或 GitHub 链接？如有请提取 URL
-2. 这篇论文的核心创新点是什么？（一句话概括）
-3. 论文使用了哪些关键技术/方法/模型？（列出关键词）
-
-摘要: {abstract_text}`
-
-const promptTemplate = ref(defaultPrompt)
-
-function resetPrompt() { promptTemplate.value = defaultPrompt }
 </script>
 
 <style scoped>
