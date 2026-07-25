@@ -27,19 +27,13 @@ async def chat(req: ChatRequest):
     if not analyzer:
         return {"reply": "AI 分析器未加载", "error": True}
 
-    # 构建带上下文的系统提示
-    context_str = ""
+    # 上下文仅作为参考数据传入，不自动拼接
+    context_data = ""
     if req.context.get("paper_count"):
-        context_str = f"\n当前可访问数据: {req.context.get('paper_count')} 篇论文"
-        if req.context.get("top_keywords"):
-            context_str += f"\n关键词: {req.context.get('top_keywords')}"
+        context_data = f"[后台数据: {req.context.get('paper_count')}篇论文, 关键词: {req.context.get('top_keywords', '')}]"
 
     full_prompt = req.message
-    if context_str:
-        full_prompt = context_str + "\n\n用户指令: " + req.message
 
-    import config
-    print(f"[chat] endpoint={config.get('ai','api_base_url')} model={config.get('ai','model')} key_len={len(config.get('ai','api_key') or '')}")
     try:
         reply = await analyzer.chat(full_prompt)
     except Exception as e:
