@@ -25,29 +25,41 @@
       </el-form-item>
 
       <el-form-item label="API Base URL">
-        <el-input v-model="settings.aiConfig.apiBaseUrl" />
+        <el-input v-model="settings.aiConfig.apiBaseUrl" @change="modelsFetched = false" />
       </el-form-item>
 
       <el-form-item label="模型名称">
-        <el-input v-model="settings.aiConfig.model" />
+        <el-select
+          v-if="availableModels.length > 0"
+          v-model="settings.aiConfig.model"
+          style="width:100%"
+          filterable
+          allow-create
+        >
+          <el-option v-for="m in availableModels" :key="m" :label="m" :value="m" />
+        </el-select>
+        <el-input v-else v-model="settings.aiConfig.model" />
       </el-form-item>
 
       <el-form-item>
-        <el-button type="primary" plain @click="testConnection">
-          测试连接
-        </el-button>
+        <div class="ai-actions">
+          <el-button type="primary" plain @click="testConnection">
+            测试连接
+          </el-button>
+          <el-button :loading="fetchingModels" @click="fetchModels">
+            📋 获取可用模型
+          </el-button>
+        </div>
+        <div v-if="modelStatus" class="model-status" :class="modelStatus.type">
+          {{ modelStatus.text }}
+        </div>
       </el-form-item>
     </el-form>
 
-    <!-- Prompt Template (collapsible) -->
+    <!-- Prompt Template -->
     <el-collapse>
       <el-collapse-item title="分析 Prompt 模板（高级）" name="prompt">
-        <el-input
-          v-model="promptTemplate"
-          type="textarea"
-          :rows="10"
-          placeholder="自定义 AI 分析摘要用的 prompt..."
-        />
+        <el-input v-model="promptTemplate" type="textarea" :rows="10" />
         <div style="margin-top:8px">
           <el-button size="small" text @click="resetPrompt">恢复默认</el-button>
         </div>
@@ -59,17 +71,16 @@
 <script setup>
 import { ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
+import axios from 'axios'
 import { useSettingsStore } from '@/stores/settings'
 
 const settings = useSettingsStore()
-
-// 监听变化自动保存到后端
-watch(
-  () => [settings.aiConfig.apiType, settings.aiConfig.apiKey, settings.aiConfig.apiBaseUrl, settings.aiConfig.model],
-  () => scheduleSave(),
-)
-
 const apiKeyInput = ref(settings.aiConfig.apiKey)
+
+const availableModels = ref([])
+const modelsFetched = ref(false)
+const fetchingModels = ref(false)
+const modelStatus = ref(null)
 
 const PRESETS = {
   openai:   { baseUrl: 'https://api.openai.com/v1',   model: 'gpt-4o' },
@@ -79,26 +90,29 @@ const PRESETS = {
   custom:   { baseUrl: '', model: '' },
 }
 
+// 切换类型时强制刷新预设
 function onTypeChange(type) {
   const preset = PRESETS[type]
   if (preset) {
     settings.aiConfig.apiBaseUrl = preset.baseUrl
     settings.aiConfig.model = preset.model
   }
+  modelsFetched.value = false
+  availableModels.value = []
+  modelStatus.value = null
 }
 
-const defaultPrompt = `你是一个论文评审助手。阅读以下论文摘要，用中文回答：
-1. 这篇论文是否提到了开源代码或 GitHub 链接？如有请提取 URL
-2. 这篇论文的核心创新点是什么？（一句话概括）
-3. 论文使用了哪些关键技术/方法/模型？（列出关键词）
-
-摘要: {abstract_text}`
-
-const promptTemplate = ref(defaultPrompt)
-
-function resetPrompt() {
-  promptTemplate.value = defaultPrompt
+// 自动保存
+let saveTimer = null
+function scheduleSave() {
+  clearTimeout(saveTimer)
+  saveTimer = setTimeout(saveToBackend, 800)
 }
+
+watch(
+  () => [settings.aiConfig.apiType, settings.aiConfig.apiKey, settings.aiConfig.apiBaseUrl, settings.aiConfig.model],
+  () => scheduleSave(),
+)
 
 async function saveToBackend() {
   try {
@@ -114,11 +128,51 @@ async function saveToBackend() {
   } catch { /* backend may not be running */ }
 }
 
-// 自动保存：API Key 变化时延迟写入后端
-let saveTimer = null
-function scheduleSave() {
-  clearTimeout(saveTimer)
-  saveTimer = setTimeout(saveToBackend, 800)
+async function fetchModels() {
+  if (!settings.aiConfig.apiKey && settings.aiConfig.apiType !== 'ollama') {
+    ElMessage.warning('请先填写 API Key')
+    return
+  }
+
+  fetchingModels.value = true
+  modelStatus.value = null
+  const baseUrl = settings.aiConfig.apiBaseUrl.replace(/\/$/, '')
+
+  try {
+    const resp = await axios.get(`${baseUrl}/models`, {
+      headers: {
+        Authorization: `Bearer ${settings.aiConfig.apiKey}`,
+      },
+      timeout: 10000,
+    })
+
+    const models = resp.data?.data || resp.data || []
+    const ids = models
+      .map((m) => (typeof m === 'string' ? m : m.id))
+      .filter(Boolean)
+      .sort()
+
+    if (ids.length > 0) {
+      availableModels.value = ids
+      modelsFetched.value = true
+      modelStatus.value = { type: 'ok', text: `找到 ${ids.length} 个模型` }
+      ElMessage.success(`找到 ${ids.length} 个可用模型`)
+      // 如果当前模型不在列表中，清空让用户选择
+      if (!ids.includes(settings.aiConfig.model)) {
+        settings.aiConfig.model = ids[0]
+      }
+    } else {
+      modelStatus.value = { type: 'warn', text: '未找到模型列表' }
+    }
+  } catch (e) {
+    const msg = e.response?.status === 401 ? 'API Key 无效'
+      : e.response?.status === 404 ? '该接口不支持查询模型列表'
+      : `查询失败: ${e.message}`
+    modelStatus.value = { type: 'error', text: msg }
+    ElMessage.warning(msg)
+  } finally {
+    fetchingModels.value = false
+  }
 }
 
 function testConnection() {
@@ -126,16 +180,27 @@ function testConnection() {
     ElMessage.warning('请先填写 API Key')
     return
   }
-  saveToBackend().then(() => {
-    ElMessage.success('配置已保存，下次启动自动加载')
-  })
-  ElMessage.info('测试连接功能将在后端实现后接入')
+  saveToBackend()
+  fetchModels()
 }
+
+const defaultPrompt = `你是一个论文评审助手。阅读以下论文摘要，用中文回答：
+1. 这篇论文是否提到了开源代码或 GitHub 链接？如有请提取 URL
+2. 这篇论文的核心创新点是什么？（一句话概括）
+3. 论文使用了哪些关键技术/方法/模型？（列出关键词）
+
+摘要: {abstract_text}`
+
+const promptTemplate = ref(defaultPrompt)
+
+function resetPrompt() { promptTemplate.value = defaultPrompt }
 </script>
 
 <style scoped>
-.form-hint {
-  font-size: var(--font-size-xs);
-  color: var(--color-text-secondary);
-}
+.form-hint { font-size: var(--font-size-xs); color: var(--color-text-secondary); }
+.ai-actions { display: flex; gap: var(--space-sm); }
+.model-status { font-size: var(--font-size-xs); margin-top: var(--space-xs); }
+.model-status.ok { color: var(--color-success); }
+.model-status.error { color: var(--color-danger); }
+.model-status.warn { color: var(--color-warning); }
 </style>
