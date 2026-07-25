@@ -45,6 +45,12 @@
       @crawl-start="handleCrawlStart"
     />
 
+    <div class="review-trigger">
+      <el-button type="primary" plain size="small" :loading="reviewLoading" @click="handleWorkspaceReview">
+        🤖 生成工作区报告
+      </el-button>
+      <span v-if="reviewStatus" class="review-status">{{ reviewStatus }}</span>
+    </div>
     <AIReviewCard :review="aiReview" />
 
     <PaperFilterBar @filter-change="handleFilter" />
@@ -120,7 +126,7 @@ import {
   fetchPapers, updatePaper,
   fetchLatestSession, fetchStats,
   fetchWorkspaces, createWorkspace, loadWorkspace, clearWorkspace,
-  fetchKeywords,
+  fetchKeywords, triggerWorkspaceReview,
 } from '@/api'
 
 const cartStore = useCartStore()
@@ -172,6 +178,23 @@ async function handleNewWorkspace() {
   } catch { ElMessage.error('创建失败') }
 }
 
+async function handleWorkspaceReview() {
+  reviewLoading.value = true
+  reviewStatus.value = '正在生成...'
+  try {
+    await triggerWorkspaceReview()
+    reviewStatus.value = '点评完成，刷新中...'
+    setTimeout(async () => {
+      await loadLatestReview()
+      reviewStatus.value = ''
+      reviewLoading.value = false
+    }, 3000)
+  } catch {
+    reviewStatus.value = '生成失败（请确认已配置 AI Key）'
+    reviewLoading.value = false
+  }
+}
+
 async function handleClearWorkspace() {
   try {
     await ElMessageBox.confirm('确定清空当前工作区所有论文？此操作不可恢复。', '确认清空', {
@@ -192,6 +215,8 @@ const aiReview = ref(null)
 const showAddDialog = ref(false)
 const showDetail = ref(false)
 const selectedPaper = ref(null)
+const reviewLoading = ref(false)
+const reviewStatus = ref('')
 const page = ref(1)
 const pageSize = 20
 const error = ref('')
@@ -456,4 +481,7 @@ async function pollCrawlStatus() {
 .ws-item.active { border-color: var(--color-primary); background: var(--color-primary-bg); }
 .ws-item-name { font-size: var(--font-size-base); font-weight: var(--font-weight-medium); }
 .ws-item-meta { font-size: var(--font-size-xs); color: var(--color-text-secondary); margin-top: 2px; }
+
+.review-trigger { display: flex; align-items: center; gap: var(--space-sm); margin-bottom: var(--space-md); }
+.review-status { font-size: var(--font-size-xs); color: var(--color-text-secondary); }
 </style>

@@ -29,13 +29,9 @@ class BaseProcessor(ABC):
 
     @abstractmethod
     async def review(self, papers: List[Dict]) -> Optional[str]:
-        """
-        对一批论文进行汇总点评。
-
-        Args:
-            papers: 论文列表
-
-        Returns:
-            str: AI 点评文本，或 None（如果无法生成）
-        """
+        """对一批论文进行汇总点评。"""
         ...
+
+    async def review_with_prompt(self, prompt: str) -> Optional[str]:
+        """直接发送自定义 prompt。可选实现。"""
+        return None

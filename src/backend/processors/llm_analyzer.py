@@ -101,6 +101,17 @@ class LLMAnalyzer(BaseProcessor):
             return {"has_code": False, "code_url": None, "innovation": None,
                     "technologies": "[]", "analyzed": False}
 
+    async def review_with_prompt(self, prompt: str) -> Optional[str]:
+        """直接发送自定义 prompt，返回 AI 回复文本。"""
+        api_key = config_get("ai", "api_key")
+        if not api_key:
+            print("[llm] WARNING: API key not configured")
+            return None
+        result = await self._call_llm(prompt)
+        if result:
+            return json.dumps(result, ensure_ascii=False)
+        return None
+
     async def review(self, papers: List[Dict]) -> Optional[str]:
         """对一批论文进行汇总点评。"""
         if not papers:

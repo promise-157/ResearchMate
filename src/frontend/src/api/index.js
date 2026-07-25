@@ -102,3 +102,6 @@ export function deleteWorkspace(id) {
 export function clearWorkspace() {
   return api.post('/workspaces/current/clear')
 }
+export function triggerWorkspaceReview() {
+  return api.post('/workspace/review')
+}
