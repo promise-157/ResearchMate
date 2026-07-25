@@ -14,7 +14,7 @@
     <div v-if="expanded" class="review-body">
       <!-- stats row -->
       <div class="review-stats">
-        <span>共 <strong>{{ review.total_papers || '?' }}</strong> 篇论文</span>
+        <span v-if="review.total_papers">共 <strong>{{ review.total_papers }}</strong> 篇论文</span>
         <span v-if="review.generated_at" class="review-time">生成于 {{ review.generated_at }}</span>
       </div>
 

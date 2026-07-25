@@ -123,6 +123,7 @@ async function handleWorkspaceReview() {
     if (!data.ok) {
       reviewStatus.value = `失败: ${data.error}`
       if (data.hint) ElMessage.warning(data.hint)
+      aiReview.value = null
       reviewLoading.value = false
       return
     }
