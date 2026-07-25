@@ -20,24 +20,17 @@ class BaseCrawler(ABC):
         ...
 
     @abstractmethod
-    async def crawl(self, url: str, mode: str = "new") -> List[Dict]:
+    async def crawl(self, url: str, mode: str = "new", keywords: str = "", sort_mode: str = "newest") -> List[Dict]:
         """
         爬取指定 URL，返回论文列表。
 
         Args:
             url: 期刊源 URL
             mode: "new" (仅新增) 或 "all" (全部重新爬取)
+            keywords: 空格分隔的搜索关键词
+            sort_mode: "newest" (最新) 或 "hottest" (最热)
 
         Returns:
-            List[Dict]: 论文信息列表，每条包含:
-                - title: str
-                - authors: str (JSON 数组字符串)
-                - abstract: str
-                - journal_name: str
-                - publish_year: int
-                - arxiv_id: str | None
-                - paper_url: str | None
-                - has_code: bool
-                - code_url: str | None
+            List[Dict]: 论文信息列表
         """
         ...

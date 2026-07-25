@@ -54,7 +54,9 @@ class PaperUpdate(BaseModel):
 
 class CrawlRequest(BaseModel):
     source_ids: List[int]
-    mode: str = "new"  # "new" | "all"
+    mode: str = "new"       # "new" | "all"
+    keywords: str = ""       # 空格分隔的关键词
+    sort_mode: str = "newest"  # "newest" | "hottest"
 
 
 class CrawlStatus(BaseModel):

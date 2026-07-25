@@ -29,8 +29,8 @@ export function deleteJournal(id) {
 }
 
 // ---- 爬取 ----
-export function startCrawl(sourceIds, mode = 'new') {
-  return api.post('/crawl', { source_ids: sourceIds, mode })
+export function startCrawl(sourceIds, mode = 'new', keywords = '', sortMode = 'newest') {
+  return api.post('/crawl', { source_ids: sourceIds, mode, keywords, sort_mode: sortMode })
 }
 
 export function getCrawlStatus() {

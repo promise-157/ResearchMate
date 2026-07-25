@@ -23,7 +23,7 @@ class GenericCrawler(BaseCrawler):
         # 兜底：不满足任何专用爬虫条件的 URL 都由它处理
         return True
 
-    async def crawl(self, url: str, mode: str = "new") -> List[Dict]:
+    async def crawl(self, url: str, mode: str = "new", keywords: str = "", sort_mode: str = "newest") -> List[Dict]:
         timeout = config_get("crawler", "timeout") or 30
         async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
             resp = await client.get(

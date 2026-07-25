@@ -332,14 +332,14 @@ async function handleDeleteSource(id) {
   }
 }
 
-async function handleCrawlStart(sourceIds, mode) {
+async function handleCrawlStart(sourceIds, mode, keywords, sortMode) {
   crawlStatus.value = 'crawling'
   crawlPercentage.value = 0
   crawlMessage.value = ''
   error.value = ''
 
   try {
-    const res = await startCrawl(sourceIds, mode)
+    const res = await startCrawl(sourceIds, mode, keywords, sortMode)
     const data = res.data || res
     if (!data.ok) {
       ElMessage.warning(data.message || '爬取启动失败')

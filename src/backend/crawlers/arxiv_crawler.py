@@ -25,35 +25,41 @@ class ArxivCrawler(BaseCrawler):
     def can_handle(self, url: str) -> bool:
         return "arxiv.org" in url
 
-    async def crawl(self, url: str, mode: str = "new") -> List[Dict]:
+    async def crawl(self, url: str, mode: str = "new", keywords: str = "", sort_mode: str = "newest") -> List[Dict]:
         """
         从 arXiv URL 爬取论文。
-
-        支持的 URL 格式:
-        - https://arxiv.org/list/cs.AI/recent
-        - https://arxiv.org/list/cs.AI/2024
-        - https://arxiv.org/abs/1706.03762
-        - https://export.arxiv.org/api/query?search_query=cat:cs.AI
         """
-        # 尝试从 URL 提取分类和日期
         category, year = self._parse_list_url(url)
 
         if category:
-            return await self._crawl_by_category(category, year, mode)
+            return await self._crawl_by_category(category, year, mode, keywords, sort_mode)
         else:
             return await self._crawl_generic(url, mode)
 
-    async def _crawl_by_category(self, category: str, year: str = None, mode: str = "new") -> List[Dict]:
-        """按分类爬取最新论文。"""
+    async def _crawl_by_category(self, category: str, year: str = None, mode: str = "new", keywords: str = "", sort_mode: str = "newest") -> List[Dict]:
+        """按分类爬取论文，支持关键词搜索和排序。"""
         max_results = config_get("crawler", "max_papers_per_source") or 50
-        query = f"cat:{category}"
+
+        # 构建查询
+        query_parts = [f"cat:{category}"]
+        if keywords:
+            query_parts.append(f"all:{keywords}")
+        query = " AND ".join(query_parts)
+
+        # 排序参数
+        if sort_mode == "hottest":
+            sort_by = "relevance"
+            sort_order = "descending"
+        else:
+            sort_by = "submittedDate"
+            sort_order = "descending"
 
         params = {
             "search_query": query,
             "start": 0,
             "max_results": max_results,
-            "sortBy": "submittedDate",
-            "sortOrder": "descending",
+            "sortBy": sort_by,
+            "sortOrder": sort_order,
         }
 
         timeout = config_get("crawler", "timeout") or 30

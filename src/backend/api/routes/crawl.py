@@ -29,7 +29,7 @@ def start_crawl(body: CrawlRequest):
     # 在后台线程中运行异步爬取
     thread = threading.Thread(
         target=_run_crawl,
-        args=(body.source_ids, body.mode),
+        args=(body.source_ids, body.mode, body.keywords, body.sort_mode),
         daemon=True,
     )
     thread.start()
@@ -41,11 +41,11 @@ def get_crawl_status():
     return _status
 
 
-def _run_crawl(source_ids: list, mode: str):
+def _run_crawl(source_ids: list, mode: str, keywords: str = "", sort_mode: str = "newest"):
     """后台线程入口 — 运行 asyncio 爬取任务。"""
     loop = asyncio.new_event_loop()
     try:
-        loop.run_until_complete(_do_crawl(source_ids, mode))
+        loop.run_until_complete(_do_crawl(source_ids, mode, keywords, sort_mode))
     except Exception as e:
         global _status
         _status = {
@@ -58,7 +58,7 @@ def _run_crawl(source_ids: list, mode: str):
         loop.close()
 
 
-async def _do_crawl(source_ids: list, mode: str):
+async def _do_crawl(source_ids: list, mode: str, keywords: str = "", sort_mode: str = "newest"):
     """执行爬取：遍历期刊源 → 爬取 → 去重 → 入库。"""
     global _status
     conn = get_connection()        # 主DB：读期刊源
@@ -88,7 +88,7 @@ async def _do_crawl(source_ids: list, mode: str):
 
             # 爬取
             try:
-                papers = await crawler.crawl(source["url"], mode)
+                papers = await crawler.crawl(source["url"], mode, keywords, sort_mode)
             except Exception as e:
                 print(f"[crawl] error crawling {source['url']}: {e}")
                 continue

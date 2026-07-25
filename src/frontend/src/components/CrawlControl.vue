@@ -45,6 +45,15 @@
       </div>
     </div>
 
+    <!-- crawl options -->
+    <div class="control-options">
+      <el-input v-model="keywords" placeholder="关键词（可选，如 transformer attention）" size="small" clearable style="flex:1" />
+      <el-select v-model="sortMode" size="small" style="width:120px">
+        <el-option label="最新" value="newest" />
+        <el-option label="最热" value="hottest" />
+      </el-select>
+    </div>
+
     <!-- mode + trigger -->
     <div class="control-footer">
       <el-radio-group v-model="mode" size="small">
@@ -54,7 +63,7 @@
       <el-button
         type="primary"
         :disabled="selectedIds.length === 0"
-        @click="$emit('crawl-start', selectedIds, mode)"
+        @click="$emit('crawl-start', selectedIds, mode, keywords, sortMode)"
       >
         开始爬取已选的 {{ selectedIds.length }} 个源
       </el-button>
@@ -73,6 +82,8 @@ defineEmits(['add-source', 'delete-source', 'crawl-start'])
 
 const selectedIds = ref(props.sources.map((s) => s.id))
 const mode = ref('new')
+const keywords = ref('')
+const sortMode = ref('newest')
 
 function toggleSource(id) {
   const idx = selectedIds.value.indexOf(id)
@@ -142,11 +153,16 @@ function toggleSource(id) {
   color: var(--color-text-secondary);
 }
 
+.control-options {
+  display: flex;
+  gap: var(--space-sm);
+  margin: var(--space-md) 0;
+}
+
 .control-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-top: var(--space-md);
   padding-top: var(--space-md);
   border-top: 1px solid var(--color-border-light);
 }
