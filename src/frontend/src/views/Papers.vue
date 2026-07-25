@@ -205,16 +205,15 @@ function handleKeywordFilter(kf) {
 }
 
 onMounted(async () => {
-  // 先加载后端设置，让 AI 状态提示准确
+  const s = useSettingsStore()
   try {
     const res = await fetchSettings()
     const data = res.data || res
     if (data.ai) {
-      const s = useSettingsStore()
       s.aiConfig.apiType = data.ai.api_type || s.aiConfig.apiType
       s.aiConfig.apiBaseUrl = data.ai.api_base_url || s.aiConfig.apiBaseUrl
       s.aiConfig.model = data.ai.model || s.aiConfig.model
-      s.aiConfig._hasKey = data.ai.has_key || false
+      s.aiConfig._hasKey = !!data.ai.has_key
     }
   } catch { /* offline */ }
   loadJournals()

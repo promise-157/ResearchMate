@@ -8,6 +8,7 @@ export const useSettingsStore = defineStore('settings', () => {
     apiKey: '',
     apiBaseUrl: 'https://api.openai.com/v1',
     model: 'gpt-4o',
+    _hasKey: false,
   })
   const crawlConfig = ref({
     maxPapersPerSource: 50,
