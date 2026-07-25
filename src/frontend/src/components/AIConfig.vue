@@ -74,7 +74,7 @@ const apiKeyInput = ref(settings.aiConfig.apiKey)
 const PRESETS = {
   openai:   { baseUrl: 'https://api.openai.com/v1',   model: 'gpt-4o' },
   claude:   { baseUrl: 'https://api.anthropic.com',    model: 'claude-sonnet-5' },
-  deepseek: { baseUrl: 'https://api.deepseek.com/v1',  model: 'deepseek-chat' },
+  deepseek: { baseUrl: 'https://api.deepseek.com/v1',  model: 'deepseek-v4-pro' },
   ollama:   { baseUrl: 'http://localhost:11434/v1',    model: 'llama3.1:8b' },
   custom:   { baseUrl: '', model: '' },
 }

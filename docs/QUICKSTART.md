@@ -72,7 +72,7 @@ python run.py
 ```bash
 export RESEARCHMATE_AI_TYPE="deepseek"
 export RESEARCHMATE_AI_KEY="sk-your-deepseek-key"
-export RESEARCHMATE_AI_MODEL="deepseek-chat"
+export RESEARCHMATE_AI_MODEL="deepseek-v4-pro"
 python run.py
 ```
 

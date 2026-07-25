@@ -270,7 +270,7 @@ Base URL: https://api.anthropic.com
 API 类型: DeepSeek
 API Key:  sk-xxxxxxxxxxxxxxxx
 Base URL: https://api.deepseek.com/v1
-模型:     deepseek-chat
+模型:     deepseek-v4-pro
 ```
 
 ### Ollama（本地模型，免费）
