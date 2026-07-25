@@ -143,6 +143,9 @@ async function handleClearWorkspace() {
     await clearWorkspace()
     papers.value = []
     totalPapers.value = 0
+    workspaceKeywords.value = []
+    keywordFilter.value = { keywords: [], mode: 'or' }
+    aiReview.value = null
     ElMessage.success('已清空')
   } catch { /* cancelled */ }
 }
