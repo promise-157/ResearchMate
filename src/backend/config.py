@@ -100,3 +100,27 @@ def get_db_path():
     db_path = Path(get("database", "path"))
     db_path.parent.mkdir(parents=True, exist_ok=True)
     return str(db_path)
+
+
+def save_config():
+    """将当前配置写回 YAML 文件。"""
+    try:
+        import yaml
+        config_path = BACKEND_DIR / "config.yaml"
+        with open(config_path, "w") as f:
+            yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
+    except Exception as e:
+        print(f"[config] save error: {e}")
+
+
+def update_ai_config(api_type=None, api_key=None, api_base_url=None, model=None):
+    """更新 AI 配置（内存 + 磁盘）。"""
+    if api_type is not None:
+        config["ai"]["api_type"] = api_type
+    if api_key is not None:
+        config["ai"]["api_key"] = api_key
+    if api_base_url is not None:
+        config["ai"]["api_base_url"] = api_base_url
+    if model is not None:
+        config["ai"]["model"] = model
+    save_config()

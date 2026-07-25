@@ -57,11 +57,17 @@
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useSettingsStore } from '@/stores/settings'
 
 const settings = useSettingsStore()
+
+// 监听变化自动保存到后端
+watch(
+  () => [settings.aiConfig.apiType, settings.aiConfig.apiKey, settings.aiConfig.apiBaseUrl, settings.aiConfig.model],
+  () => scheduleSave(),
+)
 
 const apiKeyInput = ref(settings.aiConfig.apiKey)
 
@@ -94,11 +100,35 @@ function resetPrompt() {
   promptTemplate.value = defaultPrompt
 }
 
+async function saveToBackend() {
+  try {
+    const { updateSettings } = await import('@/api')
+    await updateSettings({
+      ai: {
+        api_type: settings.aiConfig.apiType,
+        api_key: settings.aiConfig.apiKey,
+        api_base_url: settings.aiConfig.apiBaseUrl,
+        model: settings.aiConfig.model,
+      },
+    })
+  } catch { /* backend may not be running */ }
+}
+
+// 自动保存：API Key 变化时延迟写入后端
+let saveTimer = null
+function scheduleSave() {
+  clearTimeout(saveTimer)
+  saveTimer = setTimeout(saveToBackend, 800)
+}
+
 function testConnection() {
   if (!settings.aiConfig.apiKey && settings.aiConfig.apiType !== 'ollama') {
     ElMessage.warning('请先填写 API Key')
     return
   }
+  saveToBackend().then(() => {
+    ElMessage.success('配置已保存，下次启动自动加载')
+  })
   ElMessage.info('测试连接功能将在后端实现后接入')
 }
 </script>

@@ -37,6 +37,8 @@ CLAUDE.md
 .claude/
 memory/
 config/local.yaml
+config.yaml
+src/backend/config.yaml
 logs/
 *.log
 src/temp/
