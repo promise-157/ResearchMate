@@ -99,6 +99,11 @@ async def _do_crawl(source_ids: list, mode: str):
                 if _paper_exists(ws_conn, paper):
                     continue
 
+                # 关键词自动提取
+                from processors.keyword_extractor import extract_for_paper
+                kw_data = extract_for_paper(paper)
+                paper.update(kw_data)
+
                 _insert_paper(ws_conn, paper, source["id"])
                 new_count += 1
                 all_new_papers.append(paper)
@@ -243,8 +248,9 @@ def _insert_paper(conn, paper: dict, source_id: int):
     conn.execute(
         """INSERT INTO papers
            (title, authors, abstract, journal_name, publish_year,
-            arxiv_id, paper_url, has_code, code_url, ai_analyzed)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)""",
+            arxiv_id, paper_url, has_code, code_url,
+            auto_keywords, auto_technologies, ai_analyzed)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)""",
         (
             paper.get("title", ""),
             paper.get("authors", "[]"),
@@ -255,5 +261,7 @@ def _insert_paper(conn, paper: dict, source_id: int):
             paper.get("paper_url"),
             int(paper.get("has_code", False)),
             paper.get("code_url"),
+            paper.get("auto_keywords", "[]"),
+            paper.get("auto_technologies", "[]"),
         ),
     )
