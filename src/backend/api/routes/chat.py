@@ -38,6 +38,8 @@ async def chat(req: ChatRequest):
     if context_str:
         full_prompt = context_str + "\n\n用户指令: " + req.message
 
+    import config
+    print(f"[chat] endpoint={config.get('ai','api_base_url')} model={config.get('ai','model')} key_len={len(config.get('ai','api_key') or '')}")
     try:
         reply = await analyzer.chat(full_prompt)
     except Exception as e:
