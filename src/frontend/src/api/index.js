@@ -80,3 +80,20 @@ export function fetchLatestSession() {
 export function fetchDoc(name) {
   return api.get(`/docs/${name}`)
 }
+
+// ---- 工作区 ----
+export function fetchWorkspaces() {
+  return api.get('/workspaces')
+}
+export function createWorkspace(name) {
+  return api.post('/workspaces', null, { params: { name } })
+}
+export function loadWorkspace(dbPath) {
+  return api.post('/workspaces/load', null, { params: { db_path: dbPath } })
+}
+export function deleteWorkspace(id) {
+  return api.delete(`/workspaces/${id}`)
+}
+export function clearWorkspace() {
+  return api.post('/workspaces/current/clear')
+}

@@ -8,6 +8,7 @@ from datetime import datetime
 from fastapi import APIRouter
 
 from storage.database import get_connection, dict_from_row
+from storage.workspace import get_active_connection as get_ws_conn
 from storage.models import CrawlRequest
 from crawlers.registry import find_crawler
 
@@ -60,7 +61,8 @@ def _run_crawl(source_ids: list, mode: str):
 async def _do_crawl(source_ids: list, mode: str):
     """执行爬取：遍历期刊源 → 爬取 → 去重 → 入库。"""
     global _status
-    conn = get_connection()
+    conn = get_connection()        # 主DB：读期刊源
+    ws_conn = get_ws_conn()        # 工作区DB：存论文
     all_new_papers = []
 
     try:
@@ -94,10 +96,10 @@ async def _do_crawl(source_ids: list, mode: str):
             # 去重 + 入库
             new_count = 0
             for paper in papers:
-                if _paper_exists(conn, paper):
+                if _paper_exists(ws_conn, paper):
                     continue
 
-                _insert_paper(conn, paper, source["id"])
+                _insert_paper(ws_conn, paper, source["id"])
                 new_count += 1
                 all_new_papers.append(paper)
 
@@ -147,8 +149,8 @@ async def _do_crawl(source_ids: list, mode: str):
                         paper["has_code"] = True
                         paper["code_url"] = result.get("code_url")
 
-                    # 更新数据库
-                    conn.execute(
+                    # 更新工作区DB
+                    ws_conn.execute(
                         """UPDATE papers SET
                            has_code = ?, code_url = ?,
                            ai_innovation = ?, ai_technologies = ?,
@@ -162,7 +164,7 @@ async def _do_crawl(source_ids: list, mode: str):
                             paper.get("arxiv_id"),
                         ),
                     )
-                    conn.commit()
+                    ws_conn.commit()
 
                     await asyncio.sleep(0.5)
 
@@ -174,10 +176,37 @@ async def _do_crawl(source_ids: list, mode: str):
                 except Exception as e:
                     print(f"[ai] review error: {e}")
 
-        # 记录 crawl session
+        # 记录爬取任务到工作区DB
+        task_id = None
+        if all_new_papers:
+            cur = ws_conn.execute(
+                "INSERT INTO crawl_tasks (source_id, keywords, sort_mode, paper_count) VALUES (?, ?, ?, ?)",
+                (source_ids[0] if len(source_ids) == 1 else None,
+                 json.dumps(source_ids), "newest", len(all_new_papers)),
+            )
+            task_id = cur.lastrowid
+
+        # 记录AI点评到工作区DB
+        if ai_review:
+            ws_conn.execute(
+                "INSERT INTO workspace_reviews (task_ids, ai_review) VALUES (?, ?)",
+                (json.dumps([task_id] if task_id else source_ids), ai_review),
+            )
+        ws_conn.commit()
+
+        # 更新主DB中期刊源的最后爬取时间
+        for sid in source_ids:
+            conn.execute(
+                "UPDATE journal_sources SET last_crawled_at = ?, last_paper_count = ? WHERE id = ?",
+                (datetime.now().strftime("%Y-%m-%d %H:%M"), len(all_new_papers), sid),
+            )
+        conn.commit()
+
+        # 更新主DB工作区计数
+        from storage.workspace import get_active_path
         conn.execute(
-            "INSERT INTO crawl_sessions (sources, paper_count, ai_review) VALUES (?, ?, ?)",
-            (json.dumps(source_ids), len(all_new_papers), ai_review),
+            "UPDATE workspaces SET paper_count = (SELECT COUNT(*) FROM papers) WHERE db_path = ?",
+            (get_active_path(),),
         )
         conn.commit()
 
@@ -187,6 +216,7 @@ async def _do_crawl(source_ids: list, mode: str):
 
     finally:
         conn.close()
+        ws_conn.close()
 
 
 def _paper_exists(conn, paper: dict) -> bool:
@@ -209,14 +239,13 @@ def _paper_exists(conn, paper: dict) -> bool:
 
 
 def _insert_paper(conn, paper: dict, source_id: int):
-    """插入论文到数据库。"""
+    """插入论文到工作区DB。"""
     conn.execute(
         """INSERT INTO papers
-           (source_id, title, authors, abstract, journal_name, publish_year,
+           (title, authors, abstract, journal_name, publish_year,
             arxiv_id, paper_url, has_code, code_url, ai_analyzed)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)""",
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0)""",
         (
-            source_id,
             paper.get("title", ""),
             paper.get("authors", "[]"),
             paper.get("abstract", ""),

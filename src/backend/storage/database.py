@@ -22,6 +22,15 @@ def init_db():
     cursor = conn.cursor()
 
     cursor.executescript("""
+        CREATE TABLE IF NOT EXISTS workspaces (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            name        TEXT NOT NULL,
+            db_path     TEXT NOT NULL,
+            paper_count INTEGER DEFAULT 0,
+            created_at  TEXT DEFAULT (datetime('now')),
+            opened_at   TEXT DEFAULT (datetime('now'))
+        );
+
         CREATE TABLE IF NOT EXISTS journal_sources (
             id              INTEGER PRIMARY KEY AUTOINCREMENT,
             url             TEXT NOT NULL,

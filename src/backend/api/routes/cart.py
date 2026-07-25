@@ -1,6 +1,7 @@
 """购物车"""
 from fastapi import APIRouter, Query
-from storage.database import get_connection, dict_from_row
+from storage.workspace import get_active_connection as get_connection
+from storage.database import dict_from_row
 
 router = APIRouter()
 

@@ -1,7 +1,8 @@
 """统计概览 + 最新爬取会话点评"""
 import json
 from fastapi import APIRouter
-from storage.database import get_connection, dict_from_row
+from storage.workspace import get_active_connection as get_connection
+from storage.database import dict_from_row
 from storage.models import Stats
 
 router = APIRouter()
@@ -29,10 +30,10 @@ def get_stats():
 
 @router.get("/sessions/latest")
 def get_latest_session():
-    """返回最近一次爬取会话（含 AI 点评）。"""
+    """返回最近一次工作区 AI 点评。"""
     conn = get_connection()
     row = conn.execute(
-        "SELECT * FROM crawl_sessions ORDER BY created_at DESC LIMIT 1"
+        "SELECT * FROM workspace_reviews ORDER BY created_at DESC LIMIT 1"
     ).fetchone()
     conn.close()
 
