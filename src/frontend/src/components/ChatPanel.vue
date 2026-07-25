@@ -4,29 +4,28 @@
     <div class="chat-header">
       <span class="chat-title">🤖 AI 助手</span>
       <div class="chat-header-right">
-        <span v-if="contextData.paper_count" class="chat-scope">📂 {{ contextData.paper_count }} 篇</span>
-        <el-popover placement="bottom-end" :width="320" trigger="click">
-          <template #reference>
-            <el-button size="small" text>📎 附件</el-button>
-          </template>
-          <div class="attach-list">
-            <div class="attach-item"><span>📊 论文数</span><strong>{{ contextData.paper_count || 0 }} 篇</strong></div>
-            <div class="attach-item"><span>🗂 工作区</span><strong>{{ contextData.workspace || 'default' }}</strong></div>
-            <div class="attach-item"><span>💾 数据库</span><code>{{ contextData.db_file || '-' }}</code></div>
-            <div v-if="contextData.top_keywords" class="attach-item">
-              <span>🏷 关键词</span>
-              <span class="attach-kw">{{ contextData.top_keywords }}</span>
-            </div>
-            <div class="attach-item"><span>🌐 引用</span><strong>{{ contextData.journals || 0 }} 个期刊源</strong></div>
-          </div>
-        </el-popover>
+        <span v-if="contextData.paper_count" class="chat-scope">{{ contextData.paper_count }} 篇可用</span>
+        <el-badge :value="attachedPapers.length" :hidden="attachedPapers.length === 0">
+          <el-button size="small" text @click="showAttach = true">📎 附件</el-button>
+        </el-badge>
       </div>
+    </div>
+
+    <!-- Attached papers bar -->
+    <div v-if="attachedPapers.length > 0" class="attach-bar">
+      <el-tag
+        v-for="p in attachedPapers" :key="p.id"
+        size="small" closable type="info"
+        @close="detach(p.id)"
+      >
+        {{ p.title.slice(0, 30) }}...
+      </el-tag>
     </div>
 
     <!-- Messages -->
     <div ref="msgList" class="chat-messages">
       <div v-if="messages.length === 0" class="chat-empty">
-        选择模板或直接输入指令与 AI 对话
+        选择模板、附加论文或直接输入指令与 AI 对话
       </div>
       <div v-for="(m, i) in messages" :key="i" class="chat-msg" :class="m.role">
         <div class="msg-content" v-text="m.content"></div>
@@ -42,21 +41,34 @@
       <el-select v-model="selectedPreset" placeholder="模板" size="small" style="width:100px" @change="onPreset" clearable>
         <el-option v-for="(p, i) in presets" :key="i" :label="p.label" :value="i" />
       </el-select>
-      <el-input
-        v-model="input"
-        placeholder="输入指令..."
-        size="small"
-        @keyup.enter="send"
-      />
-      <el-button type="primary" size="small" :disabled="!input.trim() || sending" @click="send">
-        发送
-      </el-button>
+      <el-input v-model="input" placeholder="输入指令..." size="small" @keyup.enter="send" />
+      <el-button type="primary" size="small" :disabled="!input.trim() || sending" @click="send">发送</el-button>
     </div>
+
+    <!-- Attachment selector dialog -->
+    <el-dialog v-model="showAttach" title="选择附加论文" width="600px">
+      <el-input v-model="attachSearch" placeholder="搜索论文..." size="small" style="margin-bottom:12px" clearable />
+      <div class="attach-select-list">
+        <div v-for="p in filteredAttachPapers" :key="p.id" class="attach-select-item"
+             :class="{ selected: isAttached(p.id) }"
+             @click="toggleAttach(p)">
+          <el-checkbox :model-value="isAttached(p.id)" @click.stop="toggleAttach(p)" />
+          <div class="attach-select-info">
+            <div class="attach-select-title">{{ p.title }}</div>
+            <div class="attach-select-meta">{{ p.journal_name }} · {{ p.publish_year }}</div>
+          </div>
+        </div>
+      </div>
+      <template #footer>
+        <span style="color:var(--color-text-secondary);font-size:13px">已选 {{ attachedPapers.length }} 篇</span>
+        <el-button @click="showAttach = false">确定</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
-import { ref, nextTick } from 'vue'
+import { ref, computed, nextTick, watch } from 'vue'
 import axios from 'axios'
 
 const props = defineProps({
@@ -70,6 +82,35 @@ const input = ref('')
 const selectedPreset = ref()
 const sending = ref(false)
 const msgList = ref(null)
+
+// Attachments
+const showAttach = ref(false)
+const attachedPapers = ref([])
+const attachSearch = ref('')
+const allPapers = ref([])
+
+// Load papers for attachment selector
+watch(() => props.contextData.paper_count, async (count) => {
+  if (count > 0) {
+    try {
+      const resp = await axios.get('/api/papers', { params: { page_size: 100 } })
+      allPapers.value = resp.data?.items || resp.data?.data?.items || []
+    } catch { /* ignore */ }
+  }
+}, { immediate: true })
+
+const filteredAttachPapers = computed(() => {
+  if (!attachSearch.value) return allPapers.value
+  const q = attachSearch.value.toLowerCase()
+  return allPapers.value.filter(p => p.title.toLowerCase().includes(q))
+})
+
+function isAttached(id) { return attachedPapers.value.some(p => p.id === id) }
+function toggleAttach(p) {
+  if (isAttached(p.id)) attachedPapers.value = attachedPapers.value.filter(x => x.id !== p.id)
+  else attachedPapers.value.push(p)
+}
+function detach(id) { attachedPapers.value = attachedPapers.value.filter(p => p.id !== id) }
 
 function onPreset(idx) {
   if (idx !== undefined && idx !== null && props.presets[idx]) {
@@ -90,15 +131,23 @@ async function send() {
   if (msgList.value) msgList.value.scrollTop = msgList.value.scrollHeight
 
   try {
+    // Build prompt with attached papers
+    let prompt = text
+    if (attachedPapers.value.length > 0) {
+      const paperTexts = attachedPapers.value.map(p =>
+        `[论文: ${p.title}]\n作者: ${p.authors ? JSON.parse(p.authors||'[]').slice(0,3).join(', ') : '未知'}\n摘要: ${(p.abstract||'').slice(0,500)}\n`
+      ).join('\n')
+      prompt = `以下是我附加的 ${attachedPapers.value.length} 篇论文:\n\n${paperTexts}\n\n我的指令: ${text}`
+    }
+
     const resp = await axios.post('/api/chat', {
-      message: text,
+      message: prompt,
       scope: props.scope,
       context: props.contextData,
     })
-    const data = resp.data
     messages.value.push({
       role: 'ai',
-      content: data.reply || data.error || '无响应',
+      content: resp.data.reply || resp.data.error || '无响应',
       time: new Date().toLocaleTimeString(),
     })
   } catch (e) {
@@ -116,38 +165,30 @@ async function send() {
 </script>
 
 <style scoped>
-.chat-panel {
-  padding: 0;
-  overflow: hidden;
-  margin-bottom: var(--space-md);
-}
+.chat-panel { padding: 0; overflow: hidden; margin-bottom: var(--space-md); }
 .chat-header {
   display: flex; justify-content: space-between; align-items: center;
   padding: 8px 16px; background: var(--color-bg);
-  border-bottom: 1px solid var(--color-border-light);
-  font-size: var(--font-size-sm);
+  border-bottom: 1px solid var(--color-border-light); font-size: var(--font-size-sm);
 }
 .chat-title { font-weight: var(--font-weight-medium); }
 .chat-header-right { display: flex; align-items: center; gap: var(--space-sm); }
 .chat-scope { font-size: var(--font-size-xs); color: var(--color-text-secondary); }
 
-.attach-list { display: flex; flex-direction: column; gap: 8px; }
-.attach-item { display: flex; justify-content: space-between; align-items: flex-start; font-size: var(--font-size-sm); gap: 12px; }
-.attach-item span { color: var(--color-text-secondary); flex-shrink: 0; }
-.attach-item strong, .attach-item code { text-align: right; word-break: break-all; }
-.attach-item code { font-size: 11px; background: var(--color-bg); padding: 1px 4px; border-radius: 2px; }
-.attach-kw { font-size: var(--font-size-xs); text-align: right; }
+.attach-bar {
+  display: flex; flex-wrap: wrap; gap: 4px;
+  padding: 6px 12px; border-bottom: 1px solid var(--color-border-light);
+  background: var(--color-primary-bg);
+}
 
 .chat-messages {
   max-height: 400px; overflow-y: auto; padding: 12px 16px;
   display: flex; flex-direction: column; gap: 10px;
 }
 .chat-empty { text-align: center; color: var(--color-text-disabled); padding: 40px 0; font-size: var(--font-size-sm); }
-
 .chat-msg { max-width: 85%; }
 .chat-msg.user { align-self: flex-end; }
 .chat-msg.ai { align-self: flex-start; }
-
 .msg-content {
   padding: 8px 12px; border-radius: var(--radius-md);
   font-size: var(--font-size-sm); line-height: 1.6; white-space: pre-wrap;
@@ -161,4 +202,14 @@ async function send() {
   display: flex; gap: var(--space-xs); padding: 8px 12px;
   border-top: 1px solid var(--color-border-light);
 }
+
+.attach-select-list { max-height: 400px; overflow-y: auto; }
+.attach-select-item {
+  display: flex; align-items: flex-start; gap: 10px; padding: 8px 4px;
+  border-bottom: 1px solid var(--color-border-light); cursor: pointer;
+}
+.attach-select-item:hover { background: var(--color-bg); }
+.attach-select-item.selected { background: var(--color-primary-bg); }
+.attach-select-title { font-size: var(--font-size-sm); font-weight: var(--font-weight-medium); }
+.attach-select-meta { font-size: var(--font-size-xs); color: var(--color-text-secondary); margin-top: 2px; }
 </style>
