@@ -129,6 +129,8 @@ async function handleWorkspaceReview() {
       aiReview.value = data.review
       aiReview.value.total_papers = data.meta?.paper_count
     }
+    // 从 DB 重新加载确保数据一致
+    await loadLatestReview()
     reviewStatus.value = `✓ 点评完成 (${data.meta?.api_type} / ${data.meta?.model})`
     reviewLoading.value = false
   } catch (e) {

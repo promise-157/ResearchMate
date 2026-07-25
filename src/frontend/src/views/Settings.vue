@@ -84,6 +84,13 @@
             </div>
           </div>
         </div>
+
+        <!-- Save / Reset bar -->
+        <div class="settings-actions">
+          <el-button type="primary" @click="handleSave" :loading="saving">保存设置</el-button>
+          <el-button @click="handleReset">重置为默认</el-button>
+          <span v-if="saveMsg" class="save-msg" :class="saveMsgType">{{ saveMsg }}</span>
+        </div>
       </section>
     </div>
   </div>
@@ -95,11 +102,14 @@ import { ElMessageBox, ElMessage } from 'element-plus'
 import ThemeSwitch from '@/components/ThemeSwitch.vue'
 import AIConfig from '@/components/AIConfig.vue'
 import CrawlConfig from '@/components/CrawlConfig.vue'
-import { fetchSettings } from '@/api'
+import { fetchSettings, updateSettings } from '@/api'
 import { useSettingsStore } from '@/stores/settings'
 
 const settingsStore = useSettingsStore()
 const activeSection = ref('appearance')
+const saving = ref(false)
+const saveMsg = ref('')
+const saveMsgType = ref('')
 
 onMounted(async () => {
   try {
@@ -118,6 +128,41 @@ onMounted(async () => {
     }
   } catch { /* server may not be running */ }
 })
+
+async function handleSave() {
+  saving.value = true
+  saveMsg.value = ''
+  try {
+    await updateSettings({
+      ai: {
+        api_type: settingsStore.aiConfig.apiType,
+        api_key: settingsStore.aiConfig.apiKey,
+        api_base_url: settingsStore.aiConfig.apiBaseUrl,
+        model: settingsStore.aiConfig.model,
+      },
+    })
+    saveMsg.value = '✓ 设置已保存'
+    saveMsgType.value = 'ok'
+  } catch {
+    saveMsg.value = '保存失败'
+    saveMsgType.value = 'error'
+  } finally {
+    saving.value = false
+    setTimeout(() => { saveMsg.value = '' }, 3000)
+  }
+}
+
+async function handleReset() {
+  try {
+    await ElMessageBox.confirm('确定恢复所有设置为默认值？', '确认重置', {
+      confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning',
+    })
+    settingsStore.aiConfig = { apiType: 'openai', apiKey: '', apiBaseUrl: 'https://api.openai.com/v1', model: 'gpt-4o' }
+    settingsStore.crawlConfig = { maxPapersPerSource: 50, requestInterval: 2, timeout: 30 }
+    settingsStore.theme = 'system'
+    ElMessage.success('已重置')
+  } catch { /* cancelled */ }
+}
 
 async function confirmClearPapers() {
   try {
@@ -186,6 +231,18 @@ async function confirmResetAll() {
   font-size: var(--font-size-sm);
   margin-top: 2px;
 }
+
+.settings-actions {
+  margin-top: var(--space-xl);
+  padding-top: var(--space-md);
+  border-top: 1px solid var(--color-border-light);
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+.save-msg { font-size: var(--font-size-sm); }
+.save-msg.ok { color: var(--color-success); }
+.save-msg.error { color: var(--color-danger); }
 
 @media (max-width: 700px) {
   .settings-layout {
