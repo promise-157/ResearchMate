@@ -1,5 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { fetchCart } from '@/api'
 
 export const useCartStore = defineStore('cart', () => {
   const items = ref([])
@@ -24,5 +25,15 @@ export const useCartStore = defineStore('cart', () => {
     items.value = []
   }
 
-  return { items, count, isInCart, addItem, removeItem, clear }
+  async function refreshFromBackend() {
+    try {
+      const res = await fetchCart()
+      const data = res.data || res
+      if (Array.isArray(data)) {
+        items.value = data
+      }
+    } catch { /* ignore */ }
+  }
+
+  return { items, count, isInCart, addItem, removeItem, clear, refreshFromBackend }
 })

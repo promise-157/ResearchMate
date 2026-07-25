@@ -59,6 +59,14 @@ export function exportCart(format = 'csv') {
   return api.get('/cart/export', { params: { format } })
 }
 
+export function analyzeCartPapers(paperIds) {
+  return api.post('/cart/analyze', { paper_ids: paperIds })
+}
+
+export function analyzeAllCart() {
+  return api.post('/cart/analyze/all')
+}
+
 // ---- 设置 ----
 export function fetchSettings() {
   return api.get('/settings')
