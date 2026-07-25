@@ -26,7 +26,13 @@
     <ChatPanel
       scope="工作区"
       :presets="chatPresets"
-      :context-data="{ paper_count: totalPapers, top_keywords: workspaceKeywords.slice(0,5).map(k=>k.keyword).join(',') }"
+      :context-data="{
+        paper_count: totalPapers,
+        top_keywords: workspaceKeywords.slice(0,8).map(k=>k.keyword).join(', '),
+        workspace: wsManager?.wsName || 'default',
+        db_file: 'workspaces/default.db',
+        journals: journalSources.length,
+      }"
     />
 
     <PaperFilterBar @filter-change="handleFilter" />

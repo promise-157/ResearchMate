@@ -3,7 +3,24 @@
     <!-- Header -->
     <div class="chat-header">
       <span class="chat-title">🤖 AI 助手</span>
-      <span class="chat-scope">📂 {{ scope }}</span>
+      <div class="chat-header-right">
+        <span v-if="contextData.paper_count" class="chat-scope">📂 {{ contextData.paper_count }} 篇</span>
+        <el-popover placement="bottom-end" :width="320" trigger="click">
+          <template #reference>
+            <el-button size="small" text>📎 附件</el-button>
+          </template>
+          <div class="attach-list">
+            <div class="attach-item"><span>📊 论文数</span><strong>{{ contextData.paper_count || 0 }} 篇</strong></div>
+            <div class="attach-item"><span>🗂 工作区</span><strong>{{ contextData.workspace || 'default' }}</strong></div>
+            <div class="attach-item"><span>💾 数据库</span><code>{{ contextData.db_file || '-' }}</code></div>
+            <div v-if="contextData.top_keywords" class="attach-item">
+              <span>🏷 关键词</span>
+              <span class="attach-kw">{{ contextData.top_keywords }}</span>
+            </div>
+            <div class="attach-item"><span>🌐 引用</span><strong>{{ contextData.journals || 0 }} 个期刊源</strong></div>
+          </div>
+        </el-popover>
+      </div>
     </div>
 
     <!-- Messages -->
@@ -111,7 +128,15 @@ async function send() {
   font-size: var(--font-size-sm);
 }
 .chat-title { font-weight: var(--font-weight-medium); }
+.chat-header-right { display: flex; align-items: center; gap: var(--space-sm); }
 .chat-scope { font-size: var(--font-size-xs); color: var(--color-text-secondary); }
+
+.attach-list { display: flex; flex-direction: column; gap: 8px; }
+.attach-item { display: flex; justify-content: space-between; align-items: flex-start; font-size: var(--font-size-sm); gap: 12px; }
+.attach-item span { color: var(--color-text-secondary); flex-shrink: 0; }
+.attach-item strong, .attach-item code { text-align: right; word-break: break-all; }
+.attach-item code { font-size: 11px; background: var(--color-bg); padding: 1px 4px; border-radius: 2px; }
+.attach-kw { font-size: var(--font-size-xs); text-align: right; }
 
 .chat-messages {
   max-height: 400px; overflow-y: auto; padding: 12px 16px;
