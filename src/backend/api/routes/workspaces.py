@@ -221,6 +221,8 @@ async def trigger_workspace_review(body: ReviewRequest = ReviewRequest()):
     # 自定义 prompt 或默认
     if custom_prompt:
         prompt = custom_prompt.replace("{keywords}", kw_summary).replace("{titles}", titles_text)
+        if "json" not in prompt.lower() and "JSON" not in prompt:
+            prompt += "\n\n请返回JSON格式，不要附带其他文字。"
     else:
         prompt = f"""你是一个学术会议领域主席。请基于以下信息撰写简短综述。
 
