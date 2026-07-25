@@ -13,6 +13,8 @@ def list_papers(
     has_code: bool = Query(None),
     in_cart: bool = Query(None),
     source_id: int = Query(None),
+    keywords: str = Query(None),
+    kw_mode: str = Query("or"),
     sort: str = Query("newest"),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -34,6 +36,20 @@ def list_papers(
     if source_id is not None:
         where.append("source_id = ?")
         params.append(source_id)
+
+    if keywords:
+        kw_list = [k.strip() for k in keywords.split(",") if k.strip()]
+        if kw_list:
+            if kw_mode == "and":
+                for kw in kw_list:
+                    where.append("auto_keywords LIKE ?")
+                    params.append(f"%{kw}%")
+            else:
+                or_clauses = []
+                for kw in kw_list:
+                    or_clauses.append("auto_keywords LIKE ?")
+                    params.append(f"%{kw}%")
+                where.append(f"({' OR '.join(or_clauses)})")
 
     order = "publish_year DESC"
     if sort == "oldest":

@@ -81,6 +81,11 @@ export function fetchDoc(name) {
   return api.get(`/docs/${name}`)
 }
 
+// ---- 关键词 ----
+export function fetchKeywords() {
+  return api.get('/keywords')
+}
+
 // ---- 工作区 ----
 export function fetchWorkspaces() {
   return api.get('/workspaces')

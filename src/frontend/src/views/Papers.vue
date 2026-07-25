@@ -49,6 +49,11 @@
 
     <PaperFilterBar @filter-change="handleFilter" />
 
+    <KeywordFilter
+      :keywords="workspaceKeywords"
+      @filter-change="handleKeywordFilter"
+    />
+
     <!-- Paper list: show empty only when done loading and truly empty -->
     <div v-if="!loading.papers && papers.length === 0" class="empty-state">
       <div class="empty-state-icon">📄</div>
@@ -104,6 +109,7 @@ import CrawlControl from '@/components/CrawlControl.vue'
 import CrawlProgress from '@/components/CrawlProgress.vue'
 import AIReviewCard from '@/components/AIReviewCard.vue'
 import PaperFilterBar from '@/components/PaperFilterBar.vue'
+import KeywordFilter from '@/components/KeywordFilter.vue'
 import PaperCard from '@/components/PaperCard.vue'
 import PaperDetailModal from '@/components/PaperDetailModal.vue'
 import AddSourceDialog from '@/components/AddSourceDialog.vue'
@@ -114,6 +120,7 @@ import {
   fetchPapers, updatePaper,
   fetchLatestSession, fetchStats,
   fetchWorkspaces, createWorkspace, loadWorkspace, clearWorkspace,
+  fetchKeywords,
 } from '@/api'
 
 const cartStore = useCartStore()
@@ -191,16 +198,32 @@ const error = ref('')
 const crawlStatus = ref('idle')
 const crawlPercentage = ref(0)
 const crawlMessage = ref('')
+const workspaceKeywords = ref([])
+const keywordFilter = ref({ keywords: [], mode: 'or' })
 const filters = ref({ search: '', hasCode: false, inCart: false, sort: 'newest' })
 const loading = reactive({ journals: true, papers: false })
 let crawlPollTimer = null
 
 // ---- Lifecycle ----
+async function loadKeywords() {
+  try {
+    const res = await fetchKeywords()
+    workspaceKeywords.value = (res.data || res) || []
+  } catch { /* ignore */ }
+}
+
+function handleKeywordFilter(kf) {
+  keywordFilter.value = kf
+  page.value = 1
+  loadPapers()
+}
+
 onMounted(() => {
   loadWorkspaces()
   loadJournals()
   loadPapers()
   loadLatestReview()
+  loadKeywords()
 })
 
 // ---- Data loading ----
@@ -223,6 +246,8 @@ async function loadPapers() {
       q: filters.value.search || undefined,
       has_code: filters.value.hasCode || undefined,
       in_cart: filters.value.inCart || undefined,
+      keywords: keywordFilter.value.keywords.length > 0 ? keywordFilter.value.keywords.join(',') : undefined,
+      kw_mode: keywordFilter.value.keywords.length > 0 ? keywordFilter.value.mode : undefined,
       sort: filters.value.sort,
       page: page.value,
       page_size: pageSize,
@@ -341,10 +366,10 @@ async function pollCrawlStatus() {
       clearInterval(crawlPollTimer)
       crawlPollTimer = null
       if (data.status === 'done') {
-        // Refresh data
         await loadJournals()
         await loadPapers()
         await loadLatestReview()
+        await loadKeywords()
         // Update home stats via store
         const statsRes = await fetchStats()
         const stats = statsRes.data || statsRes
