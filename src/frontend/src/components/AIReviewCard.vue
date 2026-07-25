@@ -14,9 +14,8 @@
     <div v-if="expanded" class="review-body">
       <!-- stats row -->
       <div class="review-stats">
-        <span>本次从 <strong>{{ review.sources_count }}</strong> 个源爬取 <strong>{{ review.total_papers }}</strong> 篇</span>
-        <el-divider direction="vertical" />
-        <span class="has-code-count">🔗 <strong>{{ review.with_code_count }}</strong> 篇有开源代码</span>
+        <span>共 <strong>{{ review.total_papers || '?' }}</strong> 篇论文</span>
+        <span v-if="review.generated_at" class="review-time">生成于 {{ review.generated_at }}</span>
       </div>
 
       <!-- hot topics -->
@@ -86,9 +85,8 @@ const expanded = ref(true)
   border-bottom: 1px solid var(--color-border-light);
 }
 
-.has-code-count {
-  color: var(--color-code);
-}
+.has-code-count { color: var(--color-code); }
+.review-time { color: var(--color-text-disabled); font-size: var(--font-size-xs); }
 
 .review-section {
   margin-bottom: var(--space-md);

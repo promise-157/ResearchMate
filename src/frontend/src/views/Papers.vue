@@ -105,7 +105,7 @@ import {
   fetchJournals, addJournal, deleteJournal,
   startCrawl, getCrawlStatus,
   fetchPapers, updatePaper,
-  fetchLatestSession,
+  fetchLatestSession, fetchSettings,
   fetchKeywords, triggerWorkspaceReview, clearWorkspace,
 } from '@/api'
 
@@ -175,7 +175,7 @@ const reviewLoading = ref(false)
 const reviewStatus = ref('')
 const aiSettingsHint = computed(() => {
   const s = useSettingsStore()
-  if (!s.aiConfig.apiKey) return '提示：前往全局设置配置 AI Key'
+  if (!s.aiConfig._hasKey) return '提示：前往全局设置配置 AI Key'
   return `AI: ${s.aiConfig.apiType} / ${s.aiConfig.model}`
 })
 const page = ref(1)
@@ -204,7 +204,19 @@ function handleKeywordFilter(kf) {
   loadPapers()
 }
 
-onMounted(() => {
+onMounted(async () => {
+  // 先加载后端设置，让 AI 状态提示准确
+  try {
+    const res = await fetchSettings()
+    const data = res.data || res
+    if (data.ai) {
+      const s = useSettingsStore()
+      s.aiConfig.apiType = data.ai.api_type || s.aiConfig.apiType
+      s.aiConfig.apiBaseUrl = data.ai.api_base_url || s.aiConfig.apiBaseUrl
+      s.aiConfig.model = data.ai.model || s.aiConfig.model
+      s.aiConfig._hasKey = data.ai.has_key || false
+    }
+  } catch { /* offline */ }
   loadJournals()
   loadPapers()
   loadLatestReview()
@@ -255,10 +267,8 @@ async function loadLatestReview() {
       aiReview.value = typeof session.ai_review === 'string'
         ? JSON.parse(session.ai_review)
         : session.ai_review
-      // Add stats from session
-      if (!aiReview.value.total_papers) {
-        aiReview.value.total_papers = session.paper_count || 0
-      }
+      aiReview.value.total_papers = session.paper_count || aiReview.value.total_papers || 0
+      aiReview.value.generated_at = session.created_at?.slice(0, 16) || ''
     }
   } catch (e) { /* no review yet */ }
 }

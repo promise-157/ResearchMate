@@ -25,6 +25,7 @@ def get_settings():
         "ai": {
             "api_type": config_get("ai", "api_type"),
             "api_key": "",  # 不回传 key
+            "has_key": bool(config_get("ai", "api_key")),
             "api_base_url": config_get("ai", "api_base_url"),
             "model": config_get("ai", "model"),
         },
