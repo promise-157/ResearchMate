@@ -39,37 +39,11 @@ async def chat(req: ChatRequest):
         full_prompt = context_str + "\n\n用户指令: " + req.message
 
     try:
-        result = await analyzer.review_with_prompt(full_prompt)
+        reply = await analyzer.chat(full_prompt)
     except Exception as e:
         return {"reply": f"AI 调用失败: {str(e)[:200]}", "error": True}
 
-    if not result:
+    if not reply:
         return {"reply": "AI 未返回有效响应", "error": True}
 
-    # 尝试解析为 JSON 并格式化
-    try:
-        parsed = json.loads(result)
-        # 如果是结构化结果，格式化为可读文本
-        lines = []
-        if "hot_topics" in parsed:
-            lines.append(f"🔥 热门方向: {parsed['hot_topics']}")
-        if "tech_trends" in parsed:
-            lines.append(f"💡 技术趋势: {parsed['tech_trends']}")
-        if "recommendations" in parsed:
-            lines.append("⭐ 推荐关注:")
-            for r in parsed["recommendations"]:
-                lines.append(f"  · {r.get('title', '')} — {r.get('reason', '')}")
-        if "innovation" in parsed:
-            lines.append(f"💡 创新点: {parsed['innovation']}")
-        if "technologies" in parsed:
-            techs = parsed["technologies"]
-            lines.append(f"🛠 技术: {', '.join(techs if isinstance(techs, list) else [techs])}")
-        if "has_code" in parsed:
-            lines.append(f"🔗 代码: {parsed.get('code_url') or '未提及'}")
-        if lines:
-            return {"reply": "\n".join(lines)}
-    except (json.JSONDecodeError, TypeError):
-        pass
-
-    # 纯文本回复
-    return {"reply": result.strip('"')}
+    return {"reply": reply}

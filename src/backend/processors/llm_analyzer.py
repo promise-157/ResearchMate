@@ -136,6 +136,53 @@ class LLMAnalyzer(BaseProcessor):
             return json.dumps(result, ensure_ascii=False)
         return None
 
+    async def chat(self, prompt: str) -> Optional[str]:
+        """对话模式，返回原始文本（不解析 JSON）。"""
+        api_key = config_get("ai", "api_key")
+        if not api_key:
+            return None
+        return await self._call_llm_raw(prompt)
+
+    async def _call_llm_raw(self, prompt: str) -> Optional[str]:
+        """调用 LLM API，返回原始响应文本。"""
+        api_key = config_get("ai", "api_key")
+        if not api_key or api_key.strip() == "":
+            return None
+
+        params = self._api_params()
+        api_type = params["api_type"]
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}",
+        }
+        if api_type == "claude":
+            headers["x-api-key"] = api_key
+            headers["anthropic-version"] = "2023-06-01"
+
+        body = {
+            "model": params["model"],
+            "messages": [{"role": "user", "content": prompt}],
+            "temperature": 0.7,
+            "max_tokens": 1024,
+        }
+        if api_type == "claude":
+            body = {"model": params["model"], "max_tokens": 1024, "temperature": 0.7,
+                    "messages": [{"role": "user", "content": prompt}]}
+
+        try:
+            async with self._get_client() as client:
+                resp = await client.post(params["url"], headers=headers, json=body)
+                if resp.status_code != 200:
+                    print(f"[llm] API error {resp.status_code}: {resp.text[:200]}")
+                    return None
+                data = resp.json()
+                if api_type == "claude":
+                    return data.get("content", [{}])[0].get("text", "")
+                return data.get("choices", [{}])[0].get("message", {}).get("content", "")
+        except Exception as e:
+            print(f"[llm] Request failed: {e}")
+            return None
+
     async def _call_llm(self, prompt: str) -> Optional[Dict]:
         """调用 LLM API，返回解析后的 JSON 字典。"""
         api_key = config_get("ai", "api_key")
