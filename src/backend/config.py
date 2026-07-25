@@ -33,6 +33,7 @@ DEFAULTS = {
     "frontend": {
         "dist_dir": str(PROJECT_DIR / "frontend" / "dist"),
         "dev_server": "http://127.0.0.1:5173",
+        "dev_port": 5173,
     },
 }
 

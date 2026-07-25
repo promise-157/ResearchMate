@@ -90,27 +90,6 @@ def get_paper(paper_id: int):
     return dict_from_row(row)
 
 
-@router.get("/keywords")
-def get_keywords():
-    """返回当前工作区的关键词统计（Top-30）。"""
-    import json as _json
-    from collections import Counter
-
-    conn = get_connection()
-    rows = conn.execute(
-        "SELECT auto_keywords FROM papers WHERE auto_keywords IS NOT NULL AND auto_keywords != '[]'"
-    ).fetchall()
-    conn.close()
-
-    counter = Counter()
-    for r in rows:
-        try:
-            for k in _json.loads(r["auto_keywords"]):
-                counter[k] += 1
-        except (_json.JSONDecodeError, TypeError):
-            pass
-
-    return [{"keyword": k, "count": v} for k, v in counter.most_common(30)]
 
 
 @router.patch("/papers/{paper_id}")

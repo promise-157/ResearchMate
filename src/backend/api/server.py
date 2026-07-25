@@ -23,7 +23,7 @@ app.add_middleware(
 )
 
 # 注册路由
-from api.routes import journals, papers, crawl, cart, settings, stats, docs, workspaces
+from api.routes import journals, papers, crawl, cart, settings, stats, docs, workspaces, keywords
 
 app.include_router(journals.router, prefix="/api", tags=["journals"])
 app.include_router(papers.router, prefix="/api", tags=["papers"])
@@ -33,6 +33,7 @@ app.include_router(settings.router, prefix="/api", tags=["settings"])
 app.include_router(stats.router, prefix="/api", tags=["stats"])
 app.include_router(docs.router, prefix="/api", tags=["docs"])
 app.include_router(workspaces.router, prefix="/api", tags=["workspaces"])
+app.include_router(keywords.router, prefix="/api", tags=["keywords"])
 
 
 @app.on_event("startup")

@@ -22,6 +22,8 @@ PROJECT_DIR = BACKEND_DIR.parent
 FRONTEND_DIR = PROJECT_DIR / "frontend"
 sys.path.insert(0, str(BACKEND_DIR))
 
+from config import get as config_get
+
 _vite_process = None
 
 
@@ -87,18 +89,18 @@ def ensure_frontend_built():
 
 
 def start_vite():
-    """启动 Vite 开发服务器。返回 subprocess.Popen 对象。"""
+    """启动 Vite 开发服务器。"""
     global _vite_process
-    print("  前端: 启动 Vite 开发服务器 (http://127.0.0.1:5173) ...")
+    vite_port = config_get("frontend", "dev_port") or 5173
+    print(f"  前端: 启动 Vite 开发服务器 (http://127.0.0.1:{vite_port}) ...")
     _vite_process = subprocess.Popen(
         ["npm", "run", "dev"],
         cwd=str(FRONTEND_DIR),
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    # 等 Vite 启动
     for _ in range(10):
-        if check_port("127.0.0.1", 5173):
+        if check_port("127.0.0.1", vite_port):
             time.sleep(0.5)
             return
         time.sleep(0.5)
@@ -115,7 +117,8 @@ def stop_vite():
 
 def open_browser(host, port, dev=False):
     time.sleep(2)
-    url = f"http://{host}:{5173 if dev else port}"
+    vite_port = config_get("frontend", "dev_port") or 5173
+    url = f"http://{host}:{vite_port if dev else port}"
     print(f"\n  浏览器打开: {url}\n")
     webbrowser.open(url)
 
@@ -127,7 +130,6 @@ def main():
     parser.add_argument("--kill", action="store_true", help="杀掉占用端口的旧进程后启动")
     args = parser.parse_args()
 
-    from config import get as config_get
     from storage.database import init_db
 
     host = config_get("server", "host")
@@ -155,8 +157,8 @@ def main():
     if args.dev:
         start_vite()
         # 开发模式：如果 dist 不存在，用 Vite 代理，不打开 reload
-        print("  开发模式: 前端 http://127.0.0.1:5173 (Vite 热更新)")
-        print("           后端 http://127.0.0.1:8000")
+        print(f"  开发模式: 前端 http://127.0.0.1:{config_get('frontend', 'dev_port') or 5173} (Vite 热更新)")
+        print(f"           后端 http://{host}:{port}")
         reload_flag = True
     else:
         # 生产模式：确保前端已构建

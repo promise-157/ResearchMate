@@ -2,44 +2,12 @@
   <div class="papers-page">
     <h1 class="page-title">论文中心</h1>
 
-    <!-- Workspace selector -->
-    <div class="workspace-bar">
-      <div class="ws-info">
-        <el-icon><FolderOpened /></el-icon>
-        <span class="ws-label">工作区: {{ wsName }}</span>
-        <span class="ws-count">({{ totalPapers }} 篇)</span>
-      </div>
-      <div class="ws-actions">
-        <el-button size="small" @click="showWsDialog = true">切换</el-button>
-        <el-button size="small" @click="handleNewWorkspace">新建</el-button>
-        <el-button size="small" type="danger" plain @click="handleClearWorkspace">清空</el-button>
-      </div>
-    </div>
-
-    <!-- Workspace dialog -->
-    <el-dialog v-model="showWsDialog" title="切换工作区" width="520px">
-      <div v-if="wsList.length === 0" style="color:#999;text-align:center;padding:20px">暂无工作区</div>
-      <div v-for="ws in wsList" :key="ws.id" class="ws-item"
-           :class="{ active: ws.db_path === currentWsPath }"
-           @click="handleSwitchWs(ws)">
-        <div>
-          <div class="ws-item-name">{{ ws.name }}</div>
-          <div class="ws-item-meta">{{ ws.paper_count || 0 }} 篇 · {{ ws.opened_at || '' }}</div>
-        </div>
-        <el-button v-if="ws.db_path !== currentWsPath" size="small" type="primary" plain>加载</el-button>
-        <el-tag v-else size="small" type="success">当前</el-tag>
-      </div>
-      <template #footer>
-        <div class="ws-dialog-footer">
-          <div>
-            <el-button size="small" @click="handleExportWs">📤 导出当前工作区</el-button>
-            <el-button size="small" @click="handleImportWs">📥 导入工作区</el-button>
-          </div>
-          <input ref="importInput" type="file" accept=".db" style="display:none" @change="onImportFile" />
-          <el-button @click="showWsDialog = false">关闭</el-button>
-        </div>
-      </template>
-    </el-dialog>
+    <WorkspaceManager
+      ref="wsManager"
+      :paper-count="totalPapers"
+      @workspace-changed="onWorkspaceChanged"
+      @clear="handleClearWorkspace"
+    />
 
     <!-- Content -->
     <CrawlProgress
@@ -124,6 +92,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import CrawlControl from '@/components/CrawlControl.vue'
 import CrawlProgress from '@/components/CrawlProgress.vue'
 import AIReviewCard from '@/components/AIReviewCard.vue'
+import WorkspaceManager from '@/components/WorkspaceManager.vue'
 import PaperFilterBar from '@/components/PaperFilterBar.vue'
 import KeywordFilter from '@/components/KeywordFilter.vue'
 import PaperCard from '@/components/PaperCard.vue'
@@ -134,60 +103,12 @@ import {
   fetchJournals, addJournal, deleteJournal,
   startCrawl, getCrawlStatus,
   fetchPapers, updatePaper,
-  fetchLatestSession, fetchStats,
-  fetchWorkspaces, createWorkspace, loadWorkspace, clearWorkspace,
-  fetchKeywords, triggerWorkspaceReview, getExportUrl, importWorkspace,
+  fetchLatestSession,
+  fetchKeywords, triggerWorkspaceReview, clearWorkspace,
 } from '@/api'
 
 const cartStore = useCartStore()
-
-// ---- Workspace ----
-const showWsDialog = ref(false)
-const importInput = ref(null)
-const wsName = ref('default')
-const currentWsPath = ref('')
-const wsList = ref([])
-
-async function loadWorkspaces() {
-  try {
-    const res = await fetchWorkspaces()
-    const data = res.data || res
-    wsList.value = data.items || []
-    currentWsPath.value = data.active_path
-    wsName.value = data.active_name || 'default'
-  } catch { /* ignore */ }
-}
-
-async function handleSwitchWs(ws) {
-  try {
-    await loadWorkspace(ws.db_path)
-    currentWsPath.value = ws.db_path
-    wsName.value = ws.name
-    showWsDialog.value = false
-    papers.value = []
-    totalPapers.value = 0
-    loadPapers()
-    loadJournals()
-    ElMessage.success(`已切换到: ${ws.name}`)
-  } catch { ElMessage.error('切换失败') }
-}
-
-async function handleNewWorkspace() {
-  try {
-    const name = prompt('工作区名称:')
-    if (!name) return
-    const res = await createWorkspace(name)
-    const data = res.data || res
-    currentWsPath.value = data.db_path
-    wsName.value = data.name
-    papers.value = []
-    totalPapers.value = 0
-    loadPapers()
-    loadJournals()
-    loadWorkspaces()
-    ElMessage.success(`已创建: ${data.name}`)
-  } catch { ElMessage.error('创建失败') }
-}
+const wsManager = ref(null)
 
 async function handleWorkspaceReview() {
   reviewLoading.value = true
@@ -206,32 +127,12 @@ async function handleWorkspaceReview() {
   }
 }
 
-function handleExportWs() {
-  window.open(getExportUrl(), '_blank')
-}
-
-function handleImportWs() {
-  importInput.value?.click()
-}
-
-async function onImportFile(e) {
-  const file = e.target.files?.[0]
-  if (!file) return
-  try {
-    const res = await importWorkspace(file)
-    const data = res.data || res
-    currentWsPath.value = data.db_path
-    wsName.value = data.name
-    showWsDialog.value = false
-    papers.value = []
-    totalPapers.value = 0
-    await loadWorkspaces()
-    loadPapers()
-    loadJournals()
-    loadKeywords()
-    ElMessage.success(`已导入: ${data.name}`)
-  } catch { ElMessage.error('导入失败') }
-  e.target.value = ''
+function onWorkspaceChanged() {
+  papers.value = []
+  totalPapers.value = 0
+  loadPapers()
+  loadJournals()
+  loadKeywords()
 }
 
 async function handleClearWorkspace() {
@@ -283,7 +184,6 @@ function handleKeywordFilter(kf) {
 }
 
 onMounted(() => {
-  loadWorkspaces()
   loadJournals()
   loadPapers()
   loadLatestReview()
@@ -497,32 +397,6 @@ async function pollCrawlStatus() {
   line-height: 1.8;
 }
 
-.workspace-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 10px 16px;
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  margin-bottom: var(--space-md);
-}
-.ws-info { display: flex; align-items: center; gap: var(--space-sm); font-size: var(--font-size-sm); }
-.ws-label { font-weight: var(--font-weight-medium); }
-.ws-count { color: var(--color-text-secondary); }
-.ws-actions { display: flex; gap: var(--space-xs); }
-.ws-item {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 12px; border: 1px solid var(--color-border-light);
-  border-radius: var(--radius-sm); margin-bottom: 8px; cursor: pointer;
-}
-.ws-item:hover { border-color: var(--color-primary); }
-.ws-item.active { border-color: var(--color-primary); background: var(--color-primary-bg); }
-.ws-item-name { font-size: var(--font-size-base); font-weight: var(--font-weight-medium); }
-.ws-item-meta { font-size: var(--font-size-xs); color: var(--color-text-secondary); margin-top: 2px; }
-
 .review-trigger { display: flex; align-items: center; gap: var(--space-sm); margin-bottom: var(--space-md); }
 .review-status { font-size: var(--font-size-xs); color: var(--color-text-secondary); }
-
-.ws-dialog-footer { display: flex; justify-content: space-between; align-items: center; width: 100%; }
 </style>
