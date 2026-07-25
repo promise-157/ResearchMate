@@ -27,7 +27,8 @@
       <el-button type="primary" plain size="small" :loading="reviewLoading" @click="handleWorkspaceReview">
         🤖 生成工作区报告
       </el-button>
-      <span v-if="reviewStatus" class="review-status">{{ reviewStatus }}</span>
+      <span v-if="reviewStatus" class="review-status" :class="{ 'review-error': reviewStatus.includes('失败') }">{{ reviewStatus }}</span>
+      <span v-else-if="aiSettingsHint" class="review-status">{{ aiSettingsHint }}</span>
     </div>
     <AIReviewCard :review="aiReview" />
 
@@ -87,7 +88,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import CrawlControl from '@/components/CrawlControl.vue'
 import CrawlProgress from '@/components/CrawlProgress.vue'
@@ -99,6 +100,7 @@ import PaperCard from '@/components/PaperCard.vue'
 import PaperDetailModal from '@/components/PaperDetailModal.vue'
 import AddSourceDialog from '@/components/AddSourceDialog.vue'
 import { useCartStore } from '@/stores/cart'
+import { useSettingsStore } from '@/stores/settings'
 import {
   fetchJournals, addJournal, deleteJournal,
   startCrawl, getCrawlStatus,
@@ -112,17 +114,26 @@ const wsManager = ref(null)
 
 async function handleWorkspaceReview() {
   reviewLoading.value = true
-  reviewStatus.value = '正在生成...'
+  reviewStatus.value = 'AI 分析中，请稍候...'
   try {
-    await triggerWorkspaceReview()
-    reviewStatus.value = '点评完成，刷新中...'
-    setTimeout(async () => {
-      await loadLatestReview()
-      reviewStatus.value = ''
+    const res = await triggerWorkspaceReview()
+    const data = res.data || res
+    if (!data.ok) {
+      reviewStatus.value = `失败: ${data.error}`
+      if (data.hint) ElMessage.warning(data.hint)
       reviewLoading.value = false
-    }, 3000)
-  } catch {
-    reviewStatus.value = '生成失败（请确认已配置 AI Key）'
+      return
+    }
+    // 直接显示结果
+    if (data.review) {
+      aiReview.value = data.review
+      aiReview.value.total_papers = data.meta?.paper_count
+    }
+    reviewStatus.value = `✓ 点评完成 (${data.meta?.api_type} / ${data.meta?.model})`
+    reviewLoading.value = false
+  } catch (e) {
+    const msg = e.response?.data?.error || e.message || '网络错误'
+    reviewStatus.value = `失败: ${msg}`
     reviewLoading.value = false
   }
 }
@@ -160,6 +171,11 @@ const showDetail = ref(false)
 const selectedPaper = ref(null)
 const reviewLoading = ref(false)
 const reviewStatus = ref('')
+const aiSettingsHint = computed(() => {
+  const s = useSettingsStore()
+  if (!s.aiConfig.apiKey) return '提示：前往全局设置配置 AI Key'
+  return `AI: ${s.aiConfig.apiType} / ${s.aiConfig.model}`
+})
 const page = ref(1)
 const pageSize = 20
 const error = ref('')
@@ -402,4 +418,5 @@ async function pollCrawlStatus() {
 
 .review-trigger { display: flex; align-items: center; gap: var(--space-sm); margin-bottom: var(--space-md); }
 .review-status { font-size: var(--font-size-xs); color: var(--color-text-secondary); }
+.review-error { color: var(--color-danger); font-weight: var(--font-weight-medium); }
 </style>

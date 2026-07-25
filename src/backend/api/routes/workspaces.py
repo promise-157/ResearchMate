@@ -166,48 +166,39 @@ def clear_current_workspace():
 
 
 @router.post("/workspace/review")
-def trigger_workspace_review():
-    """触发工作区 AI 点评（后台线程）。"""
-    thread = threading.Thread(target=_run_workspace_review, daemon=True)
-    thread.start()
-    return {"ok": True, "message": "工作区点评已启动"}
-
-
-def _run_workspace_review():
-    loop = asyncio.new_event_loop()
-    try:
-        loop.run_until_complete(_do_workspace_review())
-    except Exception as e:
-        traceback.print_exc()
-    finally:
-        loop.close()
-
-
-async def _do_workspace_review():
-    """轻量化 AI 点评：基于关键词分组 + 标题，不读全文摘要。"""
+async def trigger_workspace_review():
+    """生成工作区 AI 点评（同步等待，返回结果或错误）。"""
     from processors.registry import get as get_processor
-    from processors.keyword_extractor import extract_batch
     from config import get as config_get
 
+    api_type = config_get("ai", "api_type") or "openai"
     api_key = config_get("ai", "api_key")
+    model = config_get("ai", "model") or "unknown"
+
     if not api_key:
-        print("[review] API key not configured, skipping")
-        return
+        return {
+            "ok": False,
+            "error": "未配置 API Key",
+            "hint": "请在「全局设置 → AI 配置」中填写 API Key 并等待自动保存",
+        }
 
     analyzer = get_processor("llm")
     if not analyzer:
-        return
+        return {"ok": False, "error": "AI 分析器未加载"}
 
     conn = get_active_connection()
-    papers = conn.execute("SELECT title, auto_keywords, auto_technologies FROM papers").fetchall()
-    conn.close()
+    papers = conn.execute(
+        "SELECT title, auto_keywords FROM papers"
+    ).fetchall()
 
     if not papers:
-        return
+        conn.close()
+        return {"ok": False, "error": "当前工作区没有论文"}
 
     papers_list = [dict_from_row(p) for p in papers]
+    conn.close()
 
-    # 提取关键词分组统计
+    # 关键词统计
     counter = Counter()
     for p in papers_list:
         try:
@@ -218,8 +209,6 @@ async def _do_workspace_review():
 
     top_kw = counter.most_common(20)
     kw_summary = ", ".join(f"{k}({c})" for k, c in top_kw[:15])
-
-    # 取代表性标题（每个 Top 关键词取 1-2 篇）
     title_sample = [p["title"][:100] for p in papers_list[:20]]
 
     prompt = f"""你是一个学术会议领域主席。请基于以下信息撰写简短综述。
@@ -243,12 +232,12 @@ async def _do_workspace_review():
     try:
         review_text = await analyzer.review_with_prompt(prompt)
     except Exception as e:
-        print(f"[review] AI error: {e}")
-        return
+        return {"ok": False, "error": f"AI 调用失败: {str(e)[:200]}"}
 
     if not review_text:
-        return
+        return {"ok": False, "error": "AI 返回为空，请检查 API Key 和模型名称是否正确"}
 
+    # 保存到 DB
     conn = get_active_connection()
     conn.execute(
         "INSERT INTO workspace_reviews (task_ids, ai_review) VALUES (?, ?)",
@@ -256,5 +245,21 @@ async def _do_workspace_review():
     )
     conn.commit()
     conn.close()
-    print(f"[review] workspace review saved")
+
+    # 解析结果返回给前端
+    try:
+        parsed = _json.loads(review_text)
+    except (_json.JSONDecodeError, TypeError):
+        parsed = {"raw": review_text}
+
+    return {
+        "ok": True,
+        "review": parsed,
+        "meta": {
+            "api_type": api_type,
+            "model": model,
+            "paper_count": len(papers_list),
+            "keywords_used": kw_summary[:100],
+        },
+    }
 
