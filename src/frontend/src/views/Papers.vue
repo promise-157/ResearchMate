@@ -23,15 +23,11 @@
       @crawl-start="handleCrawlStart"
     />
 
-    <div class="review-trigger">
-      <el-button type="primary" plain size="small" :loading="reviewLoading" @click="handleWorkspaceReview">
-        🤖 生成工作区报告
-      </el-button>
-      <span v-if="reviewStatus" class="review-status" :class="{ 'review-error': reviewStatus.includes('失败') }">{{ reviewStatus }}</span>
-      <span v-else-if="aiSettingsHint" class="review-status">{{ aiSettingsHint }}</span>
-    </div>
-    <PromptEditor v-model="reviewPrompt" :presets="reviewPresets" data-scope="工作区全部论文标题 + 关键词频次统计" storage-key="rm-review-prompts" />
-    <AIReviewCard :review="aiReview" />
+    <ChatPanel
+      scope="工作区"
+      :presets="chatPresets"
+      :context-data="{ paper_count: totalPapers, top_keywords: workspaceKeywords.slice(0,5).map(k=>k.keyword).join(',') }"
+    />
 
     <PaperFilterBar @filter-change="handleFilter" />
 
@@ -93,9 +89,8 @@ import { ref, reactive, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import CrawlControl from '@/components/CrawlControl.vue'
 import CrawlProgress from '@/components/CrawlProgress.vue'
-import AIReviewCard from '@/components/AIReviewCard.vue'
 import WorkspaceManager from '@/components/WorkspaceManager.vue'
-import PromptEditor from '@/components/PromptEditor.vue'
+import ChatPanel from '@/components/ChatPanel.vue'
 import PaperFilterBar from '@/components/PaperFilterBar.vue'
 import KeywordFilter from '@/components/KeywordFilter.vue'
 import PaperCard from '@/components/PaperCard.vue'
@@ -108,40 +103,11 @@ import {
   startCrawl, getCrawlStatus,
   fetchPapers, updatePaper,
   fetchLatestSession, fetchSettings,
-  fetchKeywords, triggerWorkspaceReview, clearWorkspace,
+  fetchKeywords, clearWorkspace,
 } from '@/api'
 
 const cartStore = useCartStore()
 const wsManager = ref(null)
-
-async function handleWorkspaceReview() {
-  reviewLoading.value = true
-  reviewStatus.value = 'AI 分析中，请稍候...'
-  try {
-    const res = await triggerWorkspaceReview(reviewPrompt.value || undefined)
-    const data = res.data || res
-    if (!data.ok) {
-      reviewStatus.value = `失败: ${data.error}`
-      if (data.hint) ElMessage.warning(data.hint)
-      aiReview.value = null
-      reviewLoading.value = false
-      return
-    }
-    // 直接显示结果
-    if (data.review) {
-      aiReview.value = data.review
-      aiReview.value.total_papers = data.meta?.paper_count
-    }
-    // 从 DB 重新加载确保数据一致
-    await loadLatestReview()
-    reviewStatus.value = `✓ 点评完成 (${data.meta?.api_type} / ${data.meta?.model})`
-    reviewLoading.value = false
-  } catch (e) {
-    const msg = e.response?.data?.error || e.message || '网络错误'
-    reviewStatus.value = `失败: ${msg}`
-    reviewLoading.value = false
-  }
-}
 
 function onWorkspaceChanged() {
   papers.value = []
@@ -170,17 +136,14 @@ async function handleClearWorkspace() {
 const journalSources = ref([])
 const papers = ref([])
 const totalPapers = ref(0)
-const aiReview = ref(null)
 const showAddDialog = ref(false)
 const showDetail = ref(false)
 const selectedPaper = ref(null)
-const reviewLoading = ref(false)
-const reviewStatus = ref('')
-const reviewPrompt = ref('')
-const reviewPresets = [
-  { label: '默认：关键词+标题综述', template: '' },
-  { label: '简洁版：仅推荐关注', template: '你是一个学术会议领域主席。请阅读以下论文标题和关键词统计，推荐5篇最值得关注的论文，每篇用一句话说明理由。\n\n关键词频率: {keywords}\n\n论文标题:\n{titles}\n\n返回JSON: {"recommendations": [{"title": "...", "reason": "..."}]}' },
-  { label: '详细版：完整综述', template: '你是一个学术论文评审专家。请基于以下信息撰写详细综述，包含：1.热门研究方向 2.推荐论文及理由 3.技术趋势 4.研究空白/未来方向\n\n关键词频率: {keywords}\n\n论文标题:\n{titles}\n\n返回JSON格式。' },
+const chatPresets = [
+  { label: '综述报告', template: '请基于当前工作区的论文，撰写一份简短综述：1.热门方向 2.推荐5篇最值得关注的论文 3.技术趋势' },
+  { label: '找代码', template: '哪些论文提到了开源代码或GitHub链接？列出论文标题和代码URL。' },
+  { label: '技术趋势', template: '当前工作区论文中，哪些技术/方法出现最频繁？列出Top-10并附论文数量。' },
+  { label: '论文对比', template: '选择2-3篇论文，对比它们的方法和创新点。' },
 ]
 const aiSettingsHint = computed(() => {
   const s = useSettingsStore()
