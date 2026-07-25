@@ -37,7 +37,7 @@
           <span v-if="paper.has_code" class="tag-has-code">
             🔗 <a :href="paper.code_url" target="_blank">{{ paper.code_url }}</a>
           </span>
-          <span v-else class="tag-no-code">未发现开源代码</span>
+          <span v-else class="tag-no-code">摘要未提及代码</span>
         </div>
 
         <div class="ai-detail-row">

@@ -24,4 +24,5 @@ def get_keywords():
         except (json.JSONDecodeError, TypeError):
             pass
 
-    return [{"keyword": k, "count": v} for k, v in counter.most_common(30)]
+    # 过滤只出现1次的噪音词，最多30个
+    return [{"keyword": k, "count": v} for k, v in counter.most_common(30) if v > 1][:30]

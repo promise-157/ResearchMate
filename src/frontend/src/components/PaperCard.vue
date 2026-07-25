@@ -50,7 +50,7 @@
               {{ formatCodeUrl(paper.code_url) }}
             </a>
           </span>
-          <span v-else class="tag-no-code">🔗 未发现开源代码</span>
+          <span v-else class="tag-no-code">🔗 摘要未提及代码</span>
         </div>
 
         <!-- Innovation -->

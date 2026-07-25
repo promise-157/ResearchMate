@@ -247,12 +247,20 @@ class ArxivCrawler(BaseCrawler):
         return papers
 
     def _detect_code(self, text: str) -> tuple:
-        """从文本中检测 GitHub 链接。"""
+        """从文本中检测代码仓库链接。"""
         if not text:
             return False, None
-        m = re.search(r'https?://github\.com/[\w.-]+/[\w.-]+', text, re.IGNORECASE)
-        if m:
-            return True, m.group(0)
+        patterns = [
+            r'https?://github\.com/[\w.-]+/[\w.-]+',
+            r'https?://gitlab\.com/[\w.-]+/[\w.-]+',
+            r'https?://bitbucket\.org/[\w.-]+/[\w.-]+',
+            r'https?://huggingface\.co/[\w.-]+/[\w.-]+',
+            r'https?://github\.io/[\w.-]+',
+        ]
+        for pat in patterns:
+            m = re.search(pat, text, re.IGNORECASE)
+            if m:
+                return True, m.group(0)
         return False, None
 
     def _text(self, element, tag) -> str:

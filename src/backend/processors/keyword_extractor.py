@@ -52,59 +52,69 @@ TECH_TERMS = {
     "deepspeed", "fsdp", "vllm",
 }
 
-# 构建正则：匹配英文技术缩写（连续大写字母，2-6位）和驼峰命名
-_RE_ABBR = re.compile(r'\b[A-Z]{2,6}\b')
+# 构建正则
+_RE_ABBR = re.compile(r'\b[A-Z]{3,6}\b')           # 最少3个字符的缩写
 _RE_CAMEL = re.compile(r'\b[a-z]+[A-Z][a-zA-Z]*\b')
-_RE_ARXIV_ID = re.compile(r'\b\d{4}\.\d{4,}\b')  # 过滤 arXiv ID
+_RE_ARXIV_ID = re.compile(r'\b\d{4}\.\d{4,}\b')
+
+# 非技术常用词黑名单（即使是大写也不应该是技术关键词）
+_NON_TECH_WORDS = {
+    "THE", "WE", "OUR", "IN", "THIS", "THESE", "THOSE", "IT", "ITS",
+    "FOR", "AND", "ARE", "HAS", "CAN", "WITH", "FROM", "HOW", "NEW",
+    "USE", "USED", "USING", "ONE", "TWO", "ALL", "NOT", "BUT", "ALSO",
+    "THAT", "THAN", "THEN", "WHEN", "WERE", "BEEN", "BEING", "DOES",
+    "WILL", "WOULD", "COULD", "SHOULD", "MAY", "MIGHT", "MUST",
+    "DUE", "VIA", "PER", "BASED", "GIVEN", "HOWEVER", "THUS",
+    "YET", "STILL", "JUST", "ONLY", "ALSO", "EVEN", "MUCH",
+    "WELL", "FIRST", "NEXT", "LAST", "SAME", "SUCH", "EACH",
+    "BOTH", "FEW", "MORE", "MOST", "LESS", "MANY", "SOME",
+    "ANY", "NO", "NONE", "OTHER", "OWN", "MAIN", "REAL",
+    "LARGE", "SMALL", "BEST", "BETTER", "HIGH", "LOW",
+    "KEY", "SET", "CASE", "PART", "FORM", "NUMBER", "NOVEL",
+    "PAPER", "WORK", "RESULT", "METHOD", "APPROACH", "MODEL",
+    "DATA", "TASK", "EXAMPLE", "TABLE", "FIGURE", "ET", "AL",
+    "VARIOUS", "DIFFERENT", "IMPORTANT", "SIGNIFICANT",
+    "PROPOSED", "EXISTING", "PREVIOUS", "RECENT",
+    "PC", "MM", "PIE", "AI", "CI", "CD",
+}
 
 
 def extract_keywords(title: str, abstract: str) -> Tuple[List[str], List[str]]:
-    """
-    从标题和摘要中提取关键词和技术术语。
-
-    返回: (keywords, technologies)
-      - keywords: 技术关键词（用于分组和筛选）
-      - technologies: 具体技术/方法名（更精确）
-    """
+    """从标题和摘要中提取关键词和技术术语。"""
     text = f"{title} {abstract}"
     text_clean = _RE_ARXIV_ID.sub("", text)
+    text_lower = text_clean.lower()
 
     keywords = []
     technologies = []
 
-    # 1. 预置词库匹配
-    text_lower = text_clean.lower()
+    # 1. 预置词库匹配（优先级最高）
     for term in TECH_TERMS:
         if term in text_lower:
-            # 短的进 technologies，作为精确技术标签
             if len(term) <= 20:
                 technologies.append(term)
             else:
                 keywords.append(term)
 
-    # 2. 正则提取缩写
+    # 2. 正则提取缩写（>=3 字符，且不在黑名单）
     abbrs = _RE_ABBR.findall(text_clean)
     for a in abbrs:
-        if a not in ("The", "We", "Our", "In", "This", "These", "Those",
-                     "It", "Its", "For", "And", "Are", "Has", "Can",
-                     "With", "From", "How", "New", "Use", "Used"):
+        upper = a.upper()
+        if upper not in _NON_TECH_WORDS:
             keywords.append(a.lower())
 
-    # 3. 驼峰命名
+    # 3. 驼峰命名（>=4 字符）
     camels = _RE_CAMEL.findall(text_clean)
     for c in camels:
-        if len(c) >= 4:
+        if len(c) >= 4 and c.lower() not in _NON_TECH_WORDS:
             technologies.append(c)
 
-    # 去重 + 清理
+    # 4. 去重 + 限制数量
     keywords = _dedup(keywords)
     technologies = _dedup(technologies)
+    all_kw = _dedup(technologies + keywords)
 
-    # 合并：technologies 作为更精确的子集
-    # keywords 包含 technologies + 额外的粗粒度关键词
-    all_kw = _dedup(keywords + technologies)
-
-    return all_kw[:20], technologies[:10]
+    return all_kw[:20], technologies[:8]
 
 
 def extract_batch(papers: List[dict]) -> Counter:
