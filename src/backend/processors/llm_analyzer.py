@@ -110,6 +110,8 @@ class LLMAnalyzer(BaseProcessor):
         result = await self._call_llm(prompt)
         if result:
             return json.dumps(result, ensure_ascii=False)
+        # 如果 JSON 解析失败，_call_llm 返回 None，这里也返回 None
+        # _parse_json 已将原始响应打印到日志
         return None
 
     async def review(self, papers: List[Dict]) -> Optional[str]:
@@ -202,6 +204,7 @@ class LLMAnalyzer(BaseProcessor):
     def _parse_json(self, text: str) -> Optional[Dict]:
         """从 LLM 回复中提取 JSON 对象。"""
         if not text:
+            print("[llm] empty response text")
             return None
         # 尝试直接解析
         try:
@@ -215,12 +218,12 @@ class LLMAnalyzer(BaseProcessor):
                 return json.loads(m.group(1).strip())
             except json.JSONDecodeError:
                 pass
-        # 尝试用花括号匹配
+        # 尝试用花括号匹配（非贪婪）
         m = re.search(r'\{[\s\S]*\}', text)
         if m:
             try:
                 return json.loads(m.group(0))
             except json.JSONDecodeError:
                 pass
-        print(f"[llm] Could not parse JSON from response: {text[:200]}")
+        print(f"[llm] JSON parse failed. Raw response:\n{text[:500]}")
         return None

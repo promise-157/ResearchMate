@@ -235,7 +235,11 @@ async def trigger_workspace_review():
         return {"ok": False, "error": f"AI 调用失败: {str(e)[:200]}"}
 
     if not review_text:
-        return {"ok": False, "error": "AI 返回为空，请检查 API Key 和模型名称是否正确"}
+        return {
+            "ok": False,
+            "error": "AI 返回格式异常",
+            "hint": f"请查看终端日志确认 API 连通性 (api_type={api_type}, model={model})。如持续失败，请检查模型名称是否正确或 API Base URL 是否需要调整。",
+        }
 
     # 保存到 DB
     conn = get_active_connection()
