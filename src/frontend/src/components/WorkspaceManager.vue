@@ -5,7 +5,7 @@
       <div class="ws-info">
         <el-icon><FolderOpened /></el-icon>
         <span class="ws-label">工作区: {{ wsName }}</span>
-        <span class="ws-count">({{ paperCount }} 篇)</span>
+        <span class="ws-count">({{ paperCount }} {{ unit }})</span>
       </div>
       <div class="ws-actions">
         <el-button size="small" @click="showDialog = true">切换</el-button>
@@ -22,7 +22,7 @@
            @click="handleSwitch(ws)">
         <div>
           <div class="ws-item-name">{{ ws.name }}</div>
-          <div class="ws-item-meta">{{ ws.paper_count || 0 }} 篇 · {{ ws.opened_at || '' }}</div>
+          <div class="ws-item-meta">{{ ws.item_count || 0 }} 项资料 · {{ ws.paper_count || 0 }} 篇论文 · {{ ws.opened_at || '' }}</div>
         </div>
         <el-button v-if="ws.db_path !== activePath" size="small" type="primary" plain>加载</el-button>
         <el-tag v-else size="small" type="success">当前</el-tag>
@@ -43,11 +43,12 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { ElMessage } from 'element-plus'
 import { fetchWorkspaces, createWorkspace, loadWorkspace, getExportUrl, importWorkspace } from '@/api'
 
-const props = defineProps({
+defineProps({
   paperCount: { type: Number, default: 0 },
+  unit: { type: String, default: '项' },
 })
 
 const emit = defineEmits(['workspace-changed', 'clear'])

@@ -3,15 +3,21 @@
     <!-- Hero -->
     <div class="hero">
       <h1 class="hero-title">ResearchMate</h1>
-      <p class="hero-subtitle">AI 辅助论文筛选工具 — 爬摘要、AI 分析、快速筛选</p>
+      <p class="hero-subtitle">本地资料工作台 — 导入、理解、整理、关联与按需 AI 分析</p>
     </div>
 
     <!-- Nav Cards -->
     <div class="nav-grid">
       <NavCard
+        icon="Files"
+        title="资料中心"
+        description="导入文字资料，自动去重和类型建议，并在工作区内检索整理"
+        to="/materials"
+      />
+      <NavCard
         icon="Document"
         title="论文中心"
-        description="管理期刊源，爬取论文摘要，AI 智能分析，快速筛选值得精读的论文"
+        description="同步公开论文元数据，在本地筛选并保存值得精读的论文"
         to="/papers"
       />
       <NavCard
@@ -23,7 +29,7 @@
       <NavCard
         icon="Setting"
         title="全局设置"
-        description="配置 AI 接口、爬取参数、主题外观，打造适合你的使用体验"
+        description="配置 AI 接口、同步参数与主题；外部调用始终由你主动发起"
         to="/settings"
       />
       <NavCard
@@ -36,6 +42,11 @@
 
     <!-- Stats Bar -->
     <div class="stats-bar">
+      <div class="stat-item">
+        <span class="stat-value">{{ stats.materialCount }}</span>
+        <span class="stat-label">通用资料</span>
+      </div>
+      <div class="stat-divider" />
       <div class="stat-item">
         <span class="stat-value">{{ stats.paperCount }}</span>
         <span class="stat-label">已收录论文</span>
@@ -64,6 +75,7 @@ const cartStore = useCartStore()
 
 const stats = ref({
   paperCount: '--',
+  materialCount: '--',
   cartCount: 0,
   lastUpdate: '暂无',
 })
@@ -74,6 +86,7 @@ onMounted(async () => {
     const data = res.data || res
     stats.value = {
       paperCount: data.paper_count ?? '--',
+      materialCount: data.material_count ?? '--',
       cartCount: data.cart_count ?? cartStore.count,
       lastUpdate: data.last_update || '暂无',
     }

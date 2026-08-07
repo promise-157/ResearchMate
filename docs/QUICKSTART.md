@@ -1,111 +1,50 @@
-# ResearchMate 快速上手
+# 快速上手
 
-> 5 分钟从零到爬完第一批论文。
+## 1. 启动
 
----
-
-## 1. 安装（一次性）
+首次安装：
 
 ```bash
-git clone https://github.com/promise-157/ResearchMate.git
-cd ResearchMate
-
-# Python 依赖
 conda create -n researchmate python=3.11 -y
 conda activate researchmate
-cd src/backend && pip install -r requirements.txt && cd ../..
-
-# 前端依赖
-cd src/frontend && npm install && cd ../..
+pip install -r src/backend/requirements.txt
+cd src/frontend && npm install && cd ../backend
+python run.py
 ```
 
-## 2. 启动（一个命令）
+以后启动只需：
 
 ```bash
-cd src/backend
 conda activate researchmate
+cd /path/to/ResearchMate/src/backend
 python run.py
 ```
 
-首次运行会自动构建前端。浏览器自动打开 → 看到首页。
+若不希望自动打开浏览器，追加 `--no-browser`；开发时使用 `python run.py --dev --no-browser`。端口被旧进程占用时先确认没有未完成任务，再用 `python run.py --kill`。
 
-开发模式（前端热更新）：
-```bash
-python run.py --dev
-# 浏览器打开 http://127.0.0.1:5173
-```
+## 2. 导入第一条资料
 
-## 4. 添加期刊源
+1. 打开“资料中心”，点击“导入文字”。
+2. 粘贴笔记、岗位描述、报错记录或论文摘要。
+3. 类型可选“自动建议”或手动指定；标题、标签和来源网址均可补充。
+4. 保存后可搜索，按类型/状态筛选，并把资料设为处理中或已归档。
 
-1. 点击首页 **「论文中心」** 卡片
-2. 点击 **「+ 添加期刊源」**
-3. 填入网址，例如 `https://arxiv.org/list/cs.AI/recent`
-4. 备注名写 `arXiv AI`，点添加
+相同内容会按规范化文本去重。来源网址目前仅记录出处，不会触发网络访问。
 
-## 5. 第一次爬取
+也可点击“导入图片”选择不超过 10 MB 的 PNG、JPEG 或 WebP。打开图片详情后可运行本地 OCR；需要系统已安装 Tesseract，未安装时图片仍会安全保存并显示明确错误。OCR 成功后先检查“提取预览”，再点击“接受此 OCR 文本”。接受值独立保存，不会覆盖图片资料的原始正文；只有勾选“同时搜索已接受提取文本”时搜索才会包含它。
 
-1. 勾选刚添加的期刊源
-2. 模式选 **「仅新论文」**
-3. 点 **「开始爬取已选的 1 个源」**
-4. 等待进度条走完（约 10-20 秒爬 50 篇）
+需要读取网页时，使用独立的“导入公开 URL”按钮。系统只受控读取该公开 HTML 页面，并把提取结果放入候选箱；确认标题、摘要和来源后点击“接受入库”，或点击“拒绝”。文字表单中的“来源 URL”仍只记录出处。
 
-## 6. 浏览论文
+保存 Debug 记录时建议使用“错误：、环境：、尝试：、根因：、方案：”分行书写。打开详情可检查本地规则提取值、保存用户确认值，并查找当前工作区中的相似记录；这些动作不调用外部 AI。
 
-- 每篇一张卡片：标题、作者、期刊、AI 分析
-- 🔗 绿色 = 有开源代码，灰色 = 未发现
-- 点 **「保存」** → 加入购物车
-- 点 **「查看摘要」** → 弹窗看完整摘要
-- 顶部筛选栏：搜索、只看有代码的、仅看已保存的
+## 3. 同步论文摘要
 
-## 7. 启用 AI 分析（可选）
+在“论文中心”添加类似 `https://arxiv.org/list/cs.AI/recent` 的来源并启动同步。默认通过 arXiv 公共 API 获取标题、作者、摘要和链接，不下载 PDF；同步后的论文会同时映射到通用资料核心，并继续保留论文专用视图。任意网页 URL 不会被静默抓取。
 
-AI 分析需要配置 API Key。三种方式：
+如果还没有目标论文，可在“资料中心”点击“发现 arXiv 候选”，明确输入搜索词和 1–20 条上限。结果只进入候选箱，逐条接受后才进入资料库。
 
-### OpenAI
-```bash
-export RESEARCHMATE_AI_KEY="sk-your-key"
-export RESEARCHMATE_AI_MODEL="gpt-4o-mini"
-python run.py
-```
+## 4. 可选 AI
 
-### DeepSeek
-```bash
-export RESEARCHMATE_AI_TYPE="deepseek"
-export RESEARCHMATE_AI_KEY="sk-your-deepseek-key"
-export RESEARCHMATE_AI_MODEL="deepseek-v4-pro"
-python run.py
-```
+配置模型后，打开一条通用资料，在详情中选择“类型建议”或“摘要与字段提取”，再勾选允许发送的字段并确认运行。原始正文和已接受提取文本是两个独立范围；后者只有资料已经接受过提取且用户明确勾选时才发送。单条文本范围各自最多发送前 12,000 个字符，结果与失败记录可在刷新后继续查看；建议不会自动覆盖资料。
 
-### Ollama（本地免费）
-```bash
-# 先安装 Ollama: https://ollama.com
-ollama pull llama3.1:8b
-
-export RESEARCHMATE_AI_TYPE="ollama"
-export RESEARCHMATE_AI_BASE_URL="http://localhost:11434/v1"
-export RESEARCHMATE_AI_MODEL="llama3.1:8b"
-python run.py
-```
-
-### Claude
-```bash
-export RESEARCHMATE_AI_TYPE="claude"
-export RESEARCHMATE_AI_KEY="sk-ant-your-key"
-export RESEARCHMATE_AI_MODEL="claude-haiku-4-5-20251001"
-python run.py
-```
-
-配置后重新爬取或等下次爬取，AI 会自动分析摘要并生成批量点评。
-
-## 8. 导出
-
-1. 浏览论文时把感兴趣的加购物车
-2. 点右上角 🛒 图标
-3. 点 **「复制标题列表」** 或 **「导出 CSV」**
-
----
-
-## 下一步
-
-- 完整文档：[使用手册](MANUAL.md)
-- 更多期刊源格式、常见问题 → 详见 MANUAL.md 第 7 节
+相同输入和模型会复用已有成功结果。列表中勾选 2–20 条资料可进行比较；确认框会显示输入清单，每条正文最多发送 3,000 字符。Key 配置与隐私边界见 [使用手册](MANUAL.md)。

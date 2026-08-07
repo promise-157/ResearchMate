@@ -9,8 +9,8 @@
     <template v-if="paper">
       <!-- Meta -->
       <div class="detail-meta">
-        <p v-if="paper.authors?.length" class="detail-authors">
-          {{ paper.authors.join(', ') }}
+        <p v-if="parseList(paper.authors).length" class="detail-authors">
+          {{ parseList(paper.authors).join(', ') }}
         </p>
         <p class="detail-venue">
           {{ paper.journal_name }} · {{ paper.publish_year }}
@@ -29,7 +29,7 @@
       <el-divider />
 
       <!-- AI Analysis -->
-      <div class="detail-section">
+      <div v-if="paper.ai_analyzed" class="detail-section">
         <h4>🤖 AI 分析</h4>
 
         <div class="ai-detail-row">
@@ -48,12 +48,13 @@
         <div class="ai-detail-row">
           <span class="ai-detail-label">技术栈</span>
           <div class="tech-tags-list">
-            <el-tag v-for="tag in paper.ai_technologies" :key="tag" size="small">
+            <el-tag v-for="tag in parseList(paper.ai_technologies)" :key="tag" size="small">
               {{ tag }}
             </el-tag>
           </div>
         </div>
       </div>
+      <div v-else class="detail-section text-secondary">尚未进行 AI 分析</div>
     </template>
 
     <template #footer>
@@ -76,15 +77,28 @@
 <script setup>
 import { ElMessage } from 'element-plus'
 
-defineProps({
+const props = defineProps({
   paper: { type: Object, default: null },
   visible: Boolean,
 })
 
 defineEmits(['update:visible', 'toggle-cart'])
 
-function copyCitation() {
-  ElMessage.info('复制引用功能将在后端实现后接入')
+function parseList(value) {
+  if (Array.isArray(value)) return value
+  if (!value) return []
+  try { return JSON.parse(value) } catch { return [] }
+}
+
+async function copyCitation() {
+  const paper = props.paper
+  if (!paper) return
+  const authors = parseList(paper.authors).join(', ')
+  const year = paper.publish_year ? ` (${paper.publish_year})` : ''
+  const source = paper.journal_name ? `. ${paper.journal_name}` : ''
+  const url = paper.paper_url ? `. ${paper.paper_url}` : ''
+  await navigator.clipboard.writeText(`${authors}${year}. ${paper.title}${source}${url}`)
+  ElMessage.success('引用信息已复制')
 }
 </script>
 

@@ -33,10 +33,10 @@ const props = defineProps({
 
 const statusText = computed(() => {
   const map = {
-    crawling: '正在爬取论文摘要...',
+    crawling: '正在同步论文元数据...',
     analyzing: 'AI 正在分析...',
-    done: props.message || '爬取分析完成',
-    error: props.message || '爬取出错',
+    done: props.message || '来源同步完成',
+    error: props.message || '来源同步出错',
   }
   return map[props.status] || ''
 })

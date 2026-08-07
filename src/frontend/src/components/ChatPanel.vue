@@ -72,7 +72,6 @@ import { ref, computed, nextTick, watch } from 'vue'
 import axios from 'axios'
 
 const props = defineProps({
-  scope: { type: String, default: '工作区' },
   presets: { type: Array, default: () => [] },
   contextData: { type: Object, default: () => ({}) },
 })
@@ -131,19 +130,9 @@ async function send() {
   if (msgList.value) msgList.value.scrollTop = msgList.value.scrollHeight
 
   try {
-    // Build prompt with attached papers
-    let prompt = text
-    if (attachedPapers.value.length > 0) {
-      const paperTexts = attachedPapers.value.map(p =>
-        `[论文: ${p.title}]\n作者: ${p.authors ? JSON.parse(p.authors||'[]').slice(0,3).join(', ') : '未知'}\n摘要: ${(p.abstract||'').slice(0,500)}\n`
-      ).join('\n')
-      prompt = `以下是我附加的 ${attachedPapers.value.length} 篇论文:\n\n${paperTexts}\n\n我的指令: ${text}`
-    }
-
     const resp = await axios.post('/api/chat', {
-      message: prompt,
-      scope: props.scope,
-      context: props.contextData,
+      message: text,
+      paper_ids: attachedPapers.value.map(p => p.id),
     })
     messages.value.push({
       role: 'ai',

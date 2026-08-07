@@ -2,7 +2,6 @@
 SQLite 数据库管理。连接、初始化表结构。
 """
 import sqlite3
-import os
 from config import get_db_path
 
 
@@ -27,6 +26,7 @@ def init_db():
             name        TEXT NOT NULL,
             db_path     TEXT NOT NULL,
             paper_count INTEGER DEFAULT 0,
+            item_count  INTEGER DEFAULT 0,
             created_at  TEXT DEFAULT (datetime('now')),
             opened_at   TEXT DEFAULT (datetime('now'))
         );
@@ -72,6 +72,12 @@ def init_db():
         CREATE INDEX IF NOT EXISTS idx_papers_in_cart   ON papers(in_cart);
         CREATE INDEX IF NOT EXISTS idx_papers_year      ON papers(publish_year);
     """)
+
+    workspace_columns = {
+        row[1] for row in conn.execute("PRAGMA table_info(workspaces)").fetchall()
+    }
+    if "item_count" not in workspace_columns:
+        conn.execute("ALTER TABLE workspaces ADD COLUMN item_count INTEGER DEFAULT 0")
 
     conn.commit()
     conn.close()

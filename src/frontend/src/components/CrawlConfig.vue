@@ -5,11 +5,11 @@
         <el-input-number
           v-model="settings.crawlConfig.maxPapersPerSource"
           :min="5"
-          :max="500"
+          :max="200"
           :step="5"
         />
         <template #extra>
-          <span class="form-hint">每个期刊源单次爬取的上限，防止反爬</span>
+          <span class="form-hint">每个来源单次同步上限；默认来源使用公开元数据 API</span>
         </template>
       </el-form-item>
 
@@ -21,7 +21,7 @@
           :step="1"
         />
         <template #extra>
-          <span class="form-hint">两次请求之间的等待时间，值越大越不容易被封</span>
+          <span class="form-hint">不同来源请求之间的最小间隔</span>
         </template>
       </el-form-item>
 

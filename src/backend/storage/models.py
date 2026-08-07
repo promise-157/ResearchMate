@@ -1,9 +1,8 @@
 """
 Pydantic 数据模型。定义 API 请求/响应的数据结构。
 """
-from pydantic import BaseModel, Field
-from typing import Optional, List
-from datetime import datetime
+from pydantic import AnyHttpUrl, BaseModel, Field
+from typing import Annotated, Optional, List, Literal
 
 
 # ---- Journal Sources ----
@@ -53,10 +52,10 @@ class PaperUpdate(BaseModel):
 # ---- Crawl ----
 
 class CrawlRequest(BaseModel):
-    source_ids: List[int]
-    mode: str = "new"       # "new" | "all"
+    source_ids: List[int] = Field(min_length=1, max_length=20)
+    mode: Literal["new", "all"] = "new"
     keywords: str = ""       # 空格分隔的关键词
-    sort_mode: str = "newest"  # "newest" | "hottest"
+    sort_mode: Literal["newest", "hottest"] = "newest"
 
 
 class CrawlStatus(BaseModel):
@@ -92,13 +91,14 @@ class CrawlConfig(BaseModel):
 
 class Settings(BaseModel):
     theme: str = "system"
-    ai: AIConfig = AIConfig()
-    crawl: CrawlConfig = CrawlConfig()
+    ai: AIConfig = Field(default_factory=AIConfig)
+    crawl: CrawlConfig = Field(default_factory=CrawlConfig)
 
 
 # ---- Stats ----
 
 class Stats(BaseModel):
+    material_count: int = 0
     paper_count: int = 0
     cart_count: int = 0
     last_update: Optional[str] = None
@@ -114,3 +114,59 @@ class PaperQuery(BaseModel):
     sort: str = "newest"
     page: int = 1
     page_size: int = 20
+
+
+# ---- Generic materials ----
+
+MaterialType = Literal["auto", "general", "paper", "job", "debug"]
+StoredMaterialType = Literal["general", "paper", "job", "debug"]
+MaterialStatus = Literal["inbox", "active", "archived"]
+ShortTag = Annotated[str, Field(min_length=1, max_length=50)]
+
+
+class MaterialCreate(BaseModel):
+    content_text: str = Field(min_length=1, max_length=200_000)
+    title: Optional[str] = Field(None, max_length=300)
+    item_type: MaterialType = "auto"
+    source_url: Optional[AnyHttpUrl] = None
+    tags: List[ShortTag] = Field(default_factory=list, max_length=50)
+
+
+class MaterialUpdate(BaseModel):
+    title: Optional[str] = Field(None, min_length=1, max_length=300)
+    item_type: Optional[StoredMaterialType] = None
+    status: Optional[MaterialStatus] = None
+    tags: Optional[List[ShortTag]] = Field(None, max_length=50)
+
+
+MaterialAnalysisKind = Literal["classify", "extract"]
+MaterialInputField = Literal[
+    "title", "content_text", "accepted_extraction", "item_type", "tags", "source_url"
+]
+
+
+class MaterialAnalysisRequest(BaseModel):
+    analysis_type: MaterialAnalysisKind
+    input_fields: List[MaterialInputField] = Field(min_length=1, max_length=6)
+
+
+class MaterialComparisonRequest(BaseModel):
+    item_ids: List[int] = Field(min_length=2, max_length=20)
+    input_fields: List[MaterialInputField] = Field(min_length=1, max_length=6)
+
+
+class PublicURLImportRequest(BaseModel):
+    url: str = Field(min_length=1, max_length=2_000)
+
+
+class DebugTemplateConfirmation(BaseModel):
+    error: Optional[str] = Field(None, max_length=4_000)
+    environment: Optional[str] = Field(None, max_length=4_000)
+    attempts: Optional[str] = Field(None, max_length=4_000)
+    root_cause: Optional[str] = Field(None, max_length=4_000)
+    solution: Optional[str] = Field(None, max_length=4_000)
+
+
+class ArxivDiscoveryRequest(BaseModel):
+    query: str = Field(min_length=1, max_length=200)
+    limit: int = Field(10, ge=1, le=20)

@@ -1,0 +1,198 @@
+"""Idempotent schema for the generic material core."""
+import sqlite3
+
+
+MATERIAL_SCHEMA_VERSION = 7
+
+
+def _add_column_if_missing(
+    conn: sqlite3.Connection, table: str, column: str, definition: str
+) -> None:
+    columns = {row[1] for row in conn.execute(f"PRAGMA table_info({table})")}
+    if column not in columns:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+
+def _allow_multiple_candidates_per_job(conn: sqlite3.Connection) -> None:
+    """Remove the M4 one-candidate-per-job constraint without losing rows."""
+    for index in conn.execute("PRAGMA index_list(candidates)").fetchall():
+        if not index[2]:
+            continue
+        columns = [row[2] for row in conn.execute(f"PRAGMA index_info({index[1]})")]
+        if columns != ["job_id"]:
+            continue
+        conn.executescript("""
+            CREATE TABLE candidates_v2 (
+                id                INTEGER PRIMARY KEY AUTOINCREMENT,
+                job_id            INTEGER NOT NULL REFERENCES collection_jobs(id) ON DELETE CASCADE,
+                title             TEXT NOT NULL,
+                content_text      TEXT NOT NULL,
+                summary           TEXT,
+                source_kind       TEXT NOT NULL,
+                source_url        TEXT NOT NULL,
+                content_hash      TEXT NOT NULL,
+                source_facts_json TEXT NOT NULL DEFAULT '{}',
+                status            TEXT NOT NULL DEFAULT 'pending',
+                accepted_item_id  INTEGER REFERENCES items(id) ON DELETE SET NULL,
+                created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+                updated_at        TEXT NOT NULL DEFAULT (datetime('now')),
+                UNIQUE(job_id, source_url),
+                CHECK(status IN ('pending', 'accepted', 'rejected'))
+            );
+            INSERT INTO candidates_v2
+                (id, job_id, title, content_text, summary, source_kind, source_url,
+                 content_hash, source_facts_json, status, accepted_item_id, created_at, updated_at)
+            SELECT id, job_id, title, content_text, summary, source_kind, source_url,
+                   content_hash, source_facts_json, status, accepted_item_id, created_at, updated_at
+            FROM candidates;
+            DROP TABLE candidates;
+            ALTER TABLE candidates_v2 RENAME TO candidates;
+        """)
+        break
+
+
+def ensure_material_schema(conn: sqlite3.Connection) -> None:
+    conn.executescript("""
+        CREATE TABLE IF NOT EXISTS schema_meta (
+            key         TEXT PRIMARY KEY,
+            value       TEXT NOT NULL
+        );
+
+        CREATE TABLE IF NOT EXISTS items (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            item_type       TEXT NOT NULL DEFAULT 'general',
+            title           TEXT NOT NULL,
+            content_text    TEXT NOT NULL,
+            summary         TEXT,
+            source_kind     TEXT NOT NULL DEFAULT 'text_import',
+            source_url      TEXT,
+            status          TEXT NOT NULL DEFAULT 'inbox',
+            tags_json       TEXT NOT NULL DEFAULT '[]',
+            metadata_json   TEXT NOT NULL DEFAULT '{}',
+            content_hash    TEXT NOT NULL UNIQUE,
+            created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS assets (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            item_id         INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+            asset_kind      TEXT NOT NULL,
+            original_name   TEXT,
+            storage_path    TEXT NOT NULL,
+            mime_type       TEXT,
+            content_hash    TEXT NOT NULL,
+            size_bytes      INTEGER NOT NULL,
+            created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS extraction_runs (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            item_id         INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+            processor       TEXT NOT NULL,
+            processor_version TEXT NOT NULL,
+            run_kind        TEXT NOT NULL,
+            status          TEXT NOT NULL,
+            input_hash      TEXT NOT NULL,
+            result_json     TEXT,
+            error_message   TEXT,
+            provider        TEXT,
+            model           TEXT,
+            prompt_version  TEXT,
+            created_at      TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS accepted_extractions (
+            item_id          INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+            extraction_kind  TEXT NOT NULL,
+            run_id           INTEGER NOT NULL REFERENCES extraction_runs(id) ON DELETE RESTRICT,
+            text_value       TEXT NOT NULL,
+            accepted_at      TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at       TEXT NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY(item_id, extraction_kind)
+        );
+
+        CREATE TABLE IF NOT EXISTS item_relations (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            from_item_id    INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+            to_item_id      INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+            relation_type   TEXT NOT NULL,
+            score           REAL,
+            evidence_json   TEXT NOT NULL DEFAULT '{}',
+            created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(from_item_id, to_item_id, relation_type),
+            CHECK(from_item_id != to_item_id)
+        );
+
+        CREATE TABLE IF NOT EXISTS item_template_data (
+            item_id          INTEGER PRIMARY KEY REFERENCES items(id) ON DELETE CASCADE,
+            template_key     TEXT NOT NULL,
+            schema_version   INTEGER NOT NULL,
+            extracted_json   TEXT NOT NULL DEFAULT '{}',
+            confirmed_json   TEXT NOT NULL DEFAULT '{}',
+            extractor        TEXT,
+            extractor_version TEXT,
+            extracted_at     TEXT,
+            confirmed_at     TEXT,
+            updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS collection_jobs (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            collector       TEXT NOT NULL,
+            query_json      TEXT NOT NULL DEFAULT '{}',
+            status          TEXT NOT NULL DEFAULT 'pending',
+            candidate_count INTEGER NOT NULL DEFAULT 0,
+            accepted_count  INTEGER NOT NULL DEFAULT 0,
+            error_message   TEXT,
+            created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS candidates (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            job_id          INTEGER NOT NULL REFERENCES collection_jobs(id) ON DELETE CASCADE,
+            title           TEXT NOT NULL,
+            content_text    TEXT NOT NULL,
+            summary         TEXT,
+            source_kind     TEXT NOT NULL,
+            source_url      TEXT NOT NULL,
+            content_hash    TEXT NOT NULL,
+            source_facts_json TEXT NOT NULL DEFAULT '{}',
+            status          TEXT NOT NULL DEFAULT 'pending',
+            accepted_item_id INTEGER REFERENCES items(id) ON DELETE SET NULL,
+            created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(job_id, source_url),
+            CHECK(status IN ('pending', 'accepted', 'rejected'))
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_items_type ON items(item_type);
+        CREATE INDEX IF NOT EXISTS idx_items_status ON items(status);
+        CREATE INDEX IF NOT EXISTS idx_items_created ON items(created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_assets_item ON assets(item_id);
+        CREATE INDEX IF NOT EXISTS idx_extractions_item ON extraction_runs(item_id);
+        CREATE INDEX IF NOT EXISTS idx_accepted_extractions_run ON accepted_extractions(run_id);
+        CREATE INDEX IF NOT EXISTS idx_relations_from ON item_relations(from_item_id);
+        CREATE INDEX IF NOT EXISTS idx_relations_to ON item_relations(to_item_id);
+        CREATE INDEX IF NOT EXISTS idx_templates_key ON item_template_data(template_key);
+    """)
+    _allow_multiple_candidates_per_job(conn)
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_candidates_status ON candidates(status, created_at DESC)"
+    )
+    _add_column_if_missing(
+        conn, "extraction_runs", "input_scope_json", "TEXT NOT NULL DEFAULT '[]'"
+    )
+    _add_column_if_missing(
+        conn, "extraction_runs", "input_item_ids_json", "TEXT NOT NULL DEFAULT '[]'"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_extractions_reuse "
+        "ON extraction_runs(item_id, run_kind, input_hash, status)"
+    )
+    conn.execute(
+        "INSERT INTO schema_meta(key, value) VALUES('material_schema_version', ?) "
+        "ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+        (str(MATERIAL_SCHEMA_VERSION),),
+    )

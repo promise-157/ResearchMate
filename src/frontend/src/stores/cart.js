@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import { fetchCart } from '@/api'
+import { fetchCart, updatePaper } from '@/api'
 
 export const useCartStore = defineStore('cart', () => {
   const items = ref([])
@@ -21,6 +21,11 @@ export const useCartStore = defineStore('cart', () => {
     items.value = items.value.filter((p) => p.id !== paperId)
   }
 
+  async function removeFromCart(paperId) {
+    await updatePaper(paperId, { in_cart: false })
+    removeItem(paperId)
+  }
+
   function clear() {
     items.value = []
   }
@@ -35,5 +40,5 @@ export const useCartStore = defineStore('cart', () => {
     } catch { /* ignore */ }
   }
 
-  return { items, count, isInCart, addItem, removeItem, clear, refreshFromBackend }
+  return { items, count, isInCart, addItem, removeItem, removeFromCart, clear, refreshFromBackend }
 })

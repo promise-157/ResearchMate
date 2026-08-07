@@ -33,7 +33,7 @@
     </div>
 
     <!-- AI Analysis block -->
-    <div class="ai-analysis" :class="{ expanded: aiExpanded }">
+    <div v-if="paper.ai_analyzed" class="ai-analysis" :class="{ expanded: aiExpanded }">
       <div class="ai-header" @click="aiExpanded = !aiExpanded">
         <span class="ai-label">🤖 AI 分析</span>
         <el-button text size="small">
@@ -64,7 +64,7 @@
         <!-- Tech tags -->
         <div class="ai-row tech-row">
           <span class="ai-field">🛠 技术：</span>
-          <template v-for="(tag, i) in displayedTags" :key="tag">
+          <template v-for="tag in displayedTags" :key="tag">
             <el-tag size="small" type="info">{{ tag }}</el-tag>
           </template>
           <span
@@ -75,6 +75,9 @@
           </span>
         </div>
       </div>
+    </div>
+    <div v-else class="ai-analysis">
+      <span class="tag-no-code">尚未进行 AI 分析</span>
     </div>
 
     <!-- Actions -->

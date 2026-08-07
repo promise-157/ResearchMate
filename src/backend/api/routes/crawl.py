@@ -1,6 +1,5 @@
 """爬取触发 + 状态查询。接入爬虫注册表，实现去重存储。"""
 import asyncio
-import json
 import threading
 import traceback
 from datetime import datetime
@@ -64,6 +63,7 @@ async def _do_crawl(source_ids: list, mode: str, keywords: str = "", sort_mode: 
     conn = get_connection()        # 主DB：读期刊源
     ws_conn = get_ws_conn()        # 工作区DB：存论文
     all_new_papers = []
+    source_errors = []
 
     try:
         # 获取选中的期刊源
@@ -75,7 +75,8 @@ async def _do_crawl(source_ids: list, mode: str, keywords: str = "", sort_mode: 
         sources = [dict_from_row(s) for s in sources]
 
         total_sources = len(sources)
-        papers_per_source = []
+        if total_sources == 0:
+            raise ValueError("没有找到可用的期刊源")
 
         for idx, source in enumerate(sources):
             _status["message"] = f"正在爬取: {source['label'] or source['url']}"
@@ -84,6 +85,7 @@ async def _do_crawl(source_ids: list, mode: str, keywords: str = "", sort_mode: 
             # 找到合适的爬虫
             crawler = find_crawler(source["url"])
             if not crawler:
+                source_errors.append(source["label"] or source["url"])
                 continue
 
             # 爬取
@@ -91,12 +93,21 @@ async def _do_crawl(source_ids: list, mode: str, keywords: str = "", sort_mode: 
                 papers = await crawler.crawl(source["url"], mode, keywords, sort_mode)
             except Exception as e:
                 print(f"[crawl] error crawling {source['url']}: {e}")
+                source_errors.append(source["label"] or source["url"])
                 continue
 
-            # 去重 + 入库
+            task_cursor = ws_conn.execute(
+                "INSERT INTO crawl_tasks (source_id, keywords, sort_mode, paper_count) VALUES (?, ?, ?, 0)",
+                (source["id"], keywords, sort_mode),
+            )
+            task_id = task_cursor.lastrowid
+
+            # 去重 + 入库；all 模式刷新已有元数据。
             new_count = 0
             for paper in papers:
                 if _paper_exists(ws_conn, paper):
+                    if mode == "all":
+                        _update_paper(ws_conn, paper, source["id"], task_id)
                     continue
 
                 # 关键词自动提取
@@ -104,16 +115,23 @@ async def _do_crawl(source_ids: list, mode: str, keywords: str = "", sort_mode: 
                 kw_data = extract_for_paper(paper)
                 paper.update(kw_data)
 
-                _insert_paper(ws_conn, paper, source["id"])
+                paper_id = _insert_paper(ws_conn, paper, source["id"], task_id)
+                from services.paper_materials import map_paper_to_material
+                if map_paper_to_material(ws_conn, paper_id) is None:
+                    raise RuntimeError("论文缺少可映射的标题或摘要")
                 new_count += 1
                 all_new_papers.append(paper)
 
-            papers_per_source.append(new_count)
+            ws_conn.execute(
+                "UPDATE crawl_tasks SET paper_count = ? WHERE id = ?",
+                (len(papers), task_id),
+            )
+            ws_conn.commit()
 
             # 更新期刊源的最后爬取时间
             conn.execute(
                 "UPDATE journal_sources SET last_crawled_at = ?, last_paper_count = ? WHERE id = ?",
-                (datetime.now().strftime("%Y-%m-%d %H:%M"), new_count, source["id"]),
+                (datetime.now().strftime("%Y-%m-%d %H:%M"), len(papers), source["id"]),
             )
             conn.commit()
 
@@ -122,32 +140,22 @@ async def _do_crawl(source_ids: list, mode: str, keywords: str = "", sort_mode: 
             interval = config_get("crawler", "request_interval") or 2
             await asyncio.sleep(interval)
 
-        _status["percentage"] = 90
-        _status["status"] = "done"
-        _status["message"] = f"从 {total_sources} 个源爬取完成，新增 {len(all_new_papers)} 篇"
-
-        # 记录爬取任务到工作区DB
-        if all_new_papers:
-            ws_conn.execute(
-                "INSERT INTO crawl_tasks (source_id, keywords, sort_mode, paper_count) VALUES (?, ?, ?, ?)",
-                (source_ids[0] if len(source_ids) == 1 else None,
-                 json.dumps(source_ids), "newest", len(all_new_papers)),
-            )
-        ws_conn.commit()
-
-        # 更新主DB中期刊源的最后爬取时间
-        for sid in source_ids:
-            conn.execute(
-                "UPDATE journal_sources SET last_crawled_at = ?, last_paper_count = ? WHERE id = ?",
-                (datetime.now().strftime("%Y-%m-%d %H:%M"), len(all_new_papers), sid),
-            )
-        conn.commit()
+        _status["percentage"] = 100
+        if len(source_errors) == total_sources:
+            _status["status"] = "error"
+            _status["message"] = "所有来源同步失败，请检查来源与网络"
+        else:
+            _status["status"] = "done"
+            suffix = f"，{len(source_errors)} 个来源失败" if source_errors else ""
+            _status["message"] = f"同步完成，新增 {len(all_new_papers)} 篇{suffix}"
 
         # 更新主DB工作区计数
         from storage.workspace import get_active_path
+        paper_count = ws_conn.execute("SELECT COUNT(*) FROM papers").fetchone()[0]
+        item_count = ws_conn.execute("SELECT COUNT(*) FROM items").fetchone()[0]
         conn.execute(
-            "UPDATE workspaces SET paper_count = (SELECT COUNT(*) FROM papers) WHERE db_path = ?",
-            (get_active_path(),),
+            "UPDATE workspaces SET paper_count = ?, item_count = ? WHERE db_path = ?",
+            (paper_count, item_count, get_active_path()),
         )
         conn.commit()
 
@@ -175,15 +183,17 @@ def _paper_exists(conn, paper: dict) -> bool:
     return False
 
 
-def _insert_paper(conn, paper: dict, source_id: int):
+def _insert_paper(conn, paper: dict, source_id: int, task_id: int):
     """插入论文到工作区DB。"""
-    conn.execute(
+    cursor = conn.execute(
         """INSERT INTO papers
-           (title, authors, abstract, journal_name, publish_year,
+           (task_id, source_id, title, authors, abstract, journal_name, publish_year,
             arxiv_id, paper_url, has_code, code_url,
             auto_keywords, auto_technologies, ai_analyzed)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)""",
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)""",
         (
+            task_id,
+            source_id,
             paper.get("title", ""),
             paper.get("authors", "[]"),
             paper.get("abstract", ""),
@@ -195,5 +205,32 @@ def _insert_paper(conn, paper: dict, source_id: int):
             paper.get("code_url"),
             paper.get("auto_keywords", "[]"),
             paper.get("auto_technologies", "[]"),
+        ),
+    )
+    return cursor.lastrowid
+
+
+def _update_paper(conn, paper: dict, source_id: int, task_id: int):
+    """Refresh source metadata without overwriting user or AI state."""
+    from processors.keyword_extractor import extract_for_paper
+
+    paper.update(extract_for_paper(paper))
+    identity_column = "arxiv_id" if paper.get("arxiv_id") else "paper_url"
+    identity = paper.get(identity_column)
+    if not identity:
+        return
+    conn.execute(
+        f"""UPDATE papers SET
+            task_id = ?, source_id = ?, title = ?, authors = ?, abstract = ?,
+            journal_name = ?, publish_year = ?, paper_url = ?, has_code = MAX(has_code, ?),
+            code_url = COALESCE(?, code_url), auto_keywords = ?, auto_technologies = ?
+            WHERE {identity_column} = ?""",
+        (
+            task_id, source_id, paper.get("title", ""), paper.get("authors", "[]"),
+            paper.get("abstract", ""), paper.get("journal_name", ""),
+            paper.get("publish_year"), paper.get("paper_url"),
+            int(paper.get("has_code", False)), paper.get("code_url"),
+            paper.get("auto_keywords", "[]"), paper.get("auto_technologies", "[]"),
+            identity,
         ),
     )

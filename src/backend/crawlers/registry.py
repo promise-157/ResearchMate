@@ -29,7 +29,9 @@ def list_crawlers() -> List[str]:
 def init_registry():
     """初始化注册表 — 注册所有内置爬虫。"""
     from crawlers.arxiv_crawler import ArxivCrawler
-    from crawlers.generic_crawler import GenericCrawler
+    from config import get as config_get
 
     register(ArxivCrawler())
-    register(GenericCrawler())
+    if config_get("crawler", "enable_generic_fetch"):
+        from crawlers.generic_crawler import GenericCrawler
+        register(GenericCrawler())

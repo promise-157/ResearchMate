@@ -2,6 +2,7 @@
 应用配置。优先级：环境变量 > config.yaml > 默认值
 """
 import os
+from copy import deepcopy
 from pathlib import Path
 
 # 项目根目录（src/backend -> src -> 项目根）
@@ -23,6 +24,7 @@ DEFAULTS = {
         "max_papers_per_source": 50,
         "request_interval": 2,
         "timeout": 30,
+        "enable_generic_fetch": False,
     },
     "ai": {
         "api_type": "openai",
@@ -72,12 +74,15 @@ def _env_override(config):
         "RESEARCHMATE_AI_KEY": ("ai", "api_key"),
         "RESEARCHMATE_AI_URL": ("ai", "api_base_url"),
         "RESEARCHMATE_AI_MODEL": ("ai", "model"),
+        "RESEARCHMATE_ENABLE_GENERIC_FETCH": ("crawler", "enable_generic_fetch"),
     }
     for env_var, (section, key) in env_map.items():
         val = os.environ.get(env_var)
         if val is not None:
             if key == "port":
                 val = int(val)
+            elif key == "enable_generic_fetch":
+                val = val.strip().lower() in {"1", "true", "yes", "on"}
             config[section][key] = val
     return config
 
@@ -103,18 +108,44 @@ def get_db_path():
 
 
 def save_config():
-    """将当前配置写回 YAML 文件。"""
+    """Persist non-secret settings. API keys intentionally remain in memory."""
     try:
         import yaml
         config_path = BACKEND_DIR / "config.yaml"
+        persisted = _persistable_config(config)
         with open(config_path, "w") as f:
-            yaml.dump(config, f, default_flow_style=False, allow_unicode=True)
+            yaml.safe_dump(persisted, f, default_flow_style=False, allow_unicode=True)
     except Exception as e:
         print(f"[config] save error: {e}")
 
 
+def _persistable_config(source):
+    """Return a detached config snapshot with credentials removed."""
+    persisted = deepcopy(source)
+    persisted.get("ai", {}).pop("api_key", None)
+    return persisted
+
+
+def scrub_persisted_secrets():
+    """Remove keys written by older versions while preserving other YAML settings."""
+    config_path = BACKEND_DIR / "config.yaml"
+    if not config_path.exists():
+        return
+    try:
+        import yaml
+        with open(config_path) as source:
+            persisted = yaml.safe_load(source) or {}
+        ai = persisted.get("ai")
+        if isinstance(ai, dict) and "api_key" in ai:
+            ai.pop("api_key", None)
+            with open(config_path, "w") as target:
+                yaml.safe_dump(persisted, target, default_flow_style=False, allow_unicode=True)
+    except Exception as exc:
+        print(f"[config] could not remove persisted secret: {exc}")
+
+
 def update_ai_config(api_type=None, api_key=None, api_base_url=None, model=None):
-    """更新 AI 配置（内存 + 磁盘）。"""
+    """Update provider settings; a UI-provided key is session-only."""
     if api_type is not None:
         config["ai"]["api_type"] = api_type
     if api_key is not None:
@@ -123,4 +154,17 @@ def update_ai_config(api_type=None, api_key=None, api_base_url=None, model=None)
         config["ai"]["api_base_url"] = api_base_url
     if model is not None:
         config["ai"]["model"] = model
+    save_config()
+
+
+def update_crawler_config(max_papers_per_source=None, request_interval=None, timeout=None):
+    """Update bounded collection settings and persist non-secret config."""
+    values = {
+        "max_papers_per_source": max_papers_per_source,
+        "request_interval": request_interval,
+        "timeout": timeout,
+    }
+    for key, value in values.items():
+        if value is not None:
+            config["crawler"][key] = value
     save_config()

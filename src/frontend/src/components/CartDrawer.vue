@@ -13,9 +13,10 @@
     <div v-else class="cart-list">
       <!-- Batch actions -->
       <div class="cart-toolbar">
-        <el-button size="small" :loading="analyzing" @click="analyzeAll">
+        <el-button size="small" :loading="analyzing" :disabled="cartStore.items.length > 20" @click="analyzeAll">
           🤖 批量AI分析 ({{ cartStore.items.length }}篇)
         </el-button>
+        <span v-if="cartStore.items.length > 20" class="cart-limit">单次上限 20 篇，请先缩小清单</span>
       </div>
 
       <div v-for="item in cartStore.items" :key="item.id" class="cart-item">
@@ -34,13 +35,11 @@
           <el-button size="small" text type="primary" :loading="analyzing" @click="analyzeOne(item)">
             分析
           </el-button>
-          <el-button size="small" text type="danger" @click="cartStore.removeItem(item.id)">
+          <el-button size="small" text type="danger" @click="removeOne(item.id)">
             <el-icon><Delete /></el-icon>
           </el-button>
         </div>
       </div>
-
-      <PromptEditor v-model="cartPrompt" :presets="cartPresets" data-scope="购物车论文全文摘要 + 标题" storage-key="rm-cart-prompts" />
 
       <div class="cart-actions">
         <el-button @click="copyTitles">复制标题列表</el-button>
@@ -53,22 +52,14 @@
 <script setup>
 import { ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import PromptEditor from '@/components/PromptEditor.vue'
 import { useCartStore } from '@/stores/cart'
-import { analyzeCartPapers, analyzeAllCart } from '@/api'
+import { analyzeCartPapers, analyzeAllCart, exportCart } from '@/api'
 
 defineProps({ visible: Boolean })
 defineEmits(['update:visible'])
 
 const cartStore = useCartStore()
 const analyzing = ref(false)
-const cartPrompt = ref('')
-const cartPresets = [
-  { label: '默认：标准分析', template: '' },
-  { label: '简洁：仅代码+创新', template: '分析以下论文，用中文返回JSON：{"has_code":true/false,"code_url":"链接或null","innovation":"一句话创新点（20-50字）","technologies":["技术1","技术2"]}\n\n标题: {title}\n摘要: {abstract}' },
-  { label: '详细：加评价', template: '分析以下论文，用中文返回JSON：{"has_code":true/false,"code_url":"链接或null","innovation":"创新点","technologies":["技术1"],"evaluation":"一句话评价这篇文章的实用价值"}\n\n标题: {title}\n摘要: {abstract}' },
-]
-
 function parseTags(val) {
   if (!val) return []
   if (Array.isArray(val)) return val
@@ -78,20 +69,22 @@ function parseTags(val) {
 async function analyzeOne(paper) {
   analyzing.value = true
   try {
-    await analyzeCartPapers([paper.id])
+    const result = await analyzeCartPapers([paper.id])
+    if (!result.ok) throw new Error(result.message || 'AI 未返回有效分析')
     await cartStore.refreshFromBackend()
     ElMessage.success('分析完成')
-  } catch { ElMessage.error('分析失败（请确认已配置 AI Key）') }
+  } catch (error) { ElMessage.error(error.message || '分析失败') }
   finally { analyzing.value = false }
 }
 
 async function analyzeAll() {
   analyzing.value = true
   try {
-    await analyzeAllCart()
+    const result = await analyzeAllCart()
+    if (!result.ok) throw new Error(result.message || 'AI 未返回有效分析')
     await cartStore.refreshFromBackend()
     ElMessage.success('批量分析完成')
-  } catch { ElMessage.error('分析失败（请确认已配置 AI Key）') }
+  } catch (error) { ElMessage.error(error.message || '分析失败') }
   finally { analyzing.value = false }
 }
 
@@ -101,8 +94,23 @@ function copyTitles() {
   ElMessage.success('已复制到剪贴板')
 }
 
-function exportCSV() {
-  ElMessage.info('CSV 导出将在后端实现后接入')
+async function removeOne(id) {
+  try {
+    await cartStore.removeFromCart(id)
+  } catch { ElMessage.error('移除失败') }
+}
+
+async function exportCSV() {
+  try {
+    const result = await exportCart('csv')
+    const blob = new Blob([result.data], { type: 'text/csv;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const link = document.createElement('a')
+    link.href = url
+    link.download = 'researchmate-shortlist.csv'
+    link.click()
+    URL.revokeObjectURL(url)
+  } catch { ElMessage.error('导出失败') }
 }
 </script>
 
@@ -119,6 +127,7 @@ function exportCSV() {
   padding-bottom: var(--space-sm);
   border-bottom: 1px solid var(--color-border);
 }
+.cart-limit { margin-left: 8px; color: var(--color-warning); font-size: var(--font-size-xs); }
 
 .cart-item {
   display: flex;

@@ -22,7 +22,7 @@ PROJECT_DIR = BACKEND_DIR.parent
 FRONTEND_DIR = PROJECT_DIR / "frontend"
 sys.path.insert(0, str(BACKEND_DIR))
 
-from config import get as config_get
+from config import get as config_get  # noqa: E402 - backend path is added above
 
 _vite_process = None
 
@@ -65,7 +65,7 @@ def ensure_frontend_built():
     """确保前端已构建。如果没有 dist/，自动 npm run build。"""
     dist_dir = FRONTEND_DIR / "dist"
     if dist_dir.is_dir():
-        print(f"  前端: dist/ 已就绪")
+        print("  前端: dist/ 已就绪")
         return True
 
     print("  前端未构建，正在 npm run build ...")
@@ -144,13 +144,13 @@ def main():
                 if kill_port(host, port):
                     print("  ✓ 已清理")
                 else:
-                    print(f"  ✗ 清理失败，请手动: pkill -f 'python run.py'")
+                    print("  ✗ 清理失败，请手动: pkill -f 'python run.py'")
                     sys.exit(1)
             else:
                 print("  已取消")
                 sys.exit(0)
         else:
-            print(f"\n  请手动: pkill -f 'python run.py'  或  python run.py --kill")
+            print("\n  请手动: pkill -f 'python run.py'  或  python run.py --kill")
             sys.exit(1)
 
     # 开发模式

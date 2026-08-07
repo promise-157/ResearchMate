@@ -2,7 +2,7 @@
   <el-dialog
     :model-value="visible"
     @update:model-value="$emit('update:visible', $event)"
-    title="添加期刊源"
+    title="添加论文来源"
     width="480px"
     :close-on-click-modal="false"
   >
@@ -14,6 +14,7 @@
           clearable
         />
       </el-form-item>
+      <p class="source-hint">当前默认支持 arXiv list/category URL，并通过公共 API 同步。</p>
       <el-form-item label="备注名（可选）">
         <el-input
           v-model="label"
@@ -50,3 +51,7 @@ function handleAdd() {
   emit('update:visible', false)
 }
 </script>
+
+<style scoped>
+.source-hint { margin: -8px 0 14px; color: var(--color-text-secondary); font-size: var(--font-size-xs); }
+</style>

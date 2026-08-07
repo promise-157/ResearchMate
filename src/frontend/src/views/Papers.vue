@@ -5,6 +5,7 @@
     <WorkspaceManager
       ref="wsManager"
       :paper-count="totalPapers"
+      unit="篇"
       @workspace-changed="onWorkspaceChanged"
       @clear="handleClearWorkspace"
     />
@@ -24,13 +25,11 @@
     />
 
     <ChatPanel
-      scope="工作区"
       :presets="chatPresets"
       :context-data="{
         paper_count: totalPapers,
         top_keywords: workspaceKeywords.slice(0,8).map(k=>k.keyword).join(', '),
         workspace: wsManager?.wsName || 'default',
-        db_file: 'workspaces/default.db',
         journals: journalSources.length,
       }"
     />
@@ -91,7 +90,7 @@
 </template>
 
 <script setup>
-import { ref, reactive, computed, onMounted } from 'vue'
+import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import CrawlControl from '@/components/CrawlControl.vue'
 import CrawlProgress from '@/components/CrawlProgress.vue'
@@ -108,8 +107,7 @@ import {
   fetchJournals, addJournal, deleteJournal,
   startCrawl, getCrawlStatus,
   fetchPapers, updatePaper,
-  fetchLatestSession, fetchSettings,
-  fetchKeywords, clearWorkspace,
+  fetchSettings, fetchKeywords, clearWorkspace, fetchStats,
 } from '@/api'
 
 const cartStore = useCartStore()
@@ -133,7 +131,6 @@ async function handleClearWorkspace() {
     totalPapers.value = 0
     workspaceKeywords.value = []
     keywordFilter.value = { keywords: [], mode: 'or' }
-    aiReview.value = null
     ElMessage.success('已清空')
   } catch { /* cancelled */ }
 }
@@ -151,11 +148,6 @@ const chatPresets = [
   { label: '技术趋势', template: '当前工作区论文中，哪些技术/方法出现最频繁？列出Top-10并附论文数量。' },
   { label: '论文对比', template: '选择2-3篇论文，对比它们的方法和创新点。' },
 ]
-const aiSettingsHint = computed(() => {
-  const s = useSettingsStore()
-  if (!s.aiConfig._hasKey) return '提示：前往全局设置配置 AI Key'
-  return `AI: ${s.aiConfig.apiType} / ${s.aiConfig.model}`
-})
 const page = ref(1)
 const pageSize = 20
 const error = ref('')
@@ -196,7 +188,6 @@ onMounted(async () => {
   } catch { /* offline */ }
   loadJournals()
   loadPapers()
-  loadLatestReview()
   loadKeywords()
 })
 
@@ -206,7 +197,7 @@ async function loadJournals() {
   try {
     const res = await fetchJournals()
     journalSources.value = Array.isArray(res) ? res : res.data || []
-  } catch (e) {
+  } catch {
     error.value = '加载期刊源失败'
   } finally {
     loading.journals = false
@@ -229,25 +220,11 @@ async function loadPapers() {
     const data = res.data || res
     papers.value = data.items || []
     totalPapers.value = data.total || 0
-  } catch (e) {
+  } catch {
     error.value = '加载论文失败'
   } finally {
     loading.papers = false
   }
-}
-
-async function loadLatestReview() {
-  try {
-    const res = await fetchLatestSession()
-    const session = res.data || res
-    if (session && session.ai_review) {
-      aiReview.value = typeof session.ai_review === 'string'
-        ? JSON.parse(session.ai_review)
-        : session.ai_review
-      aiReview.value.total_papers = session.paper_count || aiReview.value.total_papers || 0
-      aiReview.value.generated_at = session.created_at?.slice(0, 16) || ''
-    }
-  } catch (e) { /* no review yet */ }
 }
 
 // ---- Actions ----
@@ -268,7 +245,7 @@ async function handleToggleCart(paper) {
   // Persist to backend
   try {
     await updatePaper(paper.id, { in_cart: newCartState })
-  } catch (e) {
+  } catch {
     // Rollback on failure
     paper.in_cart = !newCartState
     if (newCartState) cartStore.removeItem(paper.id)
@@ -289,7 +266,7 @@ async function handleAddSource(url, label) {
     const data = res.data || res
     journalSources.value.unshift(data)
     ElMessage.success('期刊源已添加')
-  } catch (e) {
+  } catch {
     ElMessage.error('添加失败')
   }
 }
@@ -299,7 +276,7 @@ async function handleDeleteSource(id) {
     await deleteJournal(id)
     journalSources.value = journalSources.value.filter((s) => s.id !== id)
     ElMessage.success('已删除')
-  } catch (e) {
+  } catch {
     ElMessage.error('删除失败')
   }
 }
@@ -320,7 +297,7 @@ async function handleCrawlStart(sourceIds, mode, keywords, sortMode) {
     }
     // Start polling
     crawlPollTimer = setInterval(pollCrawlStatus, 1500)
-  } catch (e) {
+  } catch {
     crawlStatus.value = 'error'
     crawlMessage.value = '启动爬取失败'
   }
@@ -340,7 +317,6 @@ async function pollCrawlStatus() {
       if (data.status === 'done') {
         await loadJournals()
         await loadPapers()
-        await loadLatestReview()
         await loadKeywords()
         // Update home stats via store
         const statsRes = await fetchStats()
@@ -350,7 +326,7 @@ async function pollCrawlStatus() {
         }
       }
     }
-  } catch (e) {
+  } catch {
     clearInterval(crawlPollTimer)
     crawlPollTimer = null
     crawlStatus.value = 'error'

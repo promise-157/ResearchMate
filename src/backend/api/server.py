@@ -1,10 +1,16 @@
 """
 FastAPI 应用入口。初始化、CORS、挂载路由。
 """
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from storage.database import init_db
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+
+from api.routes import cart, chat, crawl, discoveries, docs, items, journals, keywords, papers, settings, stats, url_imports, workspaces
 from config import get
+from storage.database import init_db
 
 app = FastAPI(
     title="ResearchMate API",
@@ -13,17 +19,19 @@ app = FastAPI(
     redoc_url="/api/redoc",
 )
 
-# CORS — 允许前端开发服务器跨域访问
+# CORS is needed only for the local Vite development server. Keeping this
+# allowlist narrow prevents arbitrary websites from driving the local API.
+dev_port = get("frontend", "dev_port") or 5173
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=[
+        f"http://127.0.0.1:{dev_port}",
+        f"http://localhost:{dev_port}",
+    ],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# 注册路由
-from api.routes import journals, papers, crawl, cart, settings, stats, docs, workspaces, keywords, chat
 
 app.include_router(journals.router, prefix="/api", tags=["journals"])
 app.include_router(papers.router, prefix="/api", tags=["papers"])
@@ -35,11 +43,16 @@ app.include_router(docs.router, prefix="/api", tags=["docs"])
 app.include_router(workspaces.router, prefix="/api", tags=["workspaces"])
 app.include_router(keywords.router, prefix="/api", tags=["keywords"])
 app.include_router(chat.router, prefix="/api", tags=["chat"])
+app.include_router(items.router, prefix="/api", tags=["items"])
+app.include_router(url_imports.router, prefix="/api", tags=["url-imports"])
+app.include_router(discoveries.router, prefix="/api", tags=["discoveries"])
 
 
 @app.on_event("startup")
 def on_startup():
     init_db()
+    from config import scrub_persisted_secrets
+    scrub_persisted_secrets()
     from crawlers.registry import init_registry as init_crawlers
     from processors.registry import init_registry as init_processors
     init_crawlers()
@@ -52,12 +65,7 @@ def health():
 
 
 # ---- 生产模式：serve 前端静态文件 ----
-import os
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from config import get as config_get
-
-frontend_dist = config_get("frontend", "dist_dir")
+frontend_dist = get("frontend", "dist_dir")
 if os.path.isdir(frontend_dist):
     # 先挂载静态资源（JS/CSS/图片等），不加 html=True 避免拦截 API
     app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist, "assets")), name="assets")

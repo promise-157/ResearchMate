@@ -5,9 +5,8 @@
     <div class="about-card card">
       <p class="version">v0.1.0</p>
       <p class="desc">
-        ResearchMate 是一个 AI 辅助论文筛选工具。导入你感兴趣的期刊网址，
-        自动爬取论文摘要，通过 AI 分析每篇论文的创新点和技术栈，
-        帮你快速找到值得精读的论文。
+        ResearchMate 是一个本地优先的论文收件箱。它从明确支持的公开元数据来源
+        同步论文，先在本地完成筛选和收藏，再按你的明确选择调用 AI 分析。
       </p>
 
       <div class="tech-section">
@@ -19,7 +18,6 @@
           <el-tag type="primary">Vite</el-tag>
           <el-tag type="success">Element Plus</el-tag>
           <el-tag type="warning">SQLite</el-tag>
-          <el-tag>ECharts</el-tag>
           <el-tag type="danger">AI / LLM</el-tag>
         </div>
       </div>

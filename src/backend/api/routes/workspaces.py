@@ -1,14 +1,12 @@
 """工作区管理 API"""
 import os
 import json as _json
-import asyncio
-import shutil
-import threading
-import traceback
+import sqlite3
 from collections import Counter
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse
+from pydantic import BaseModel
 from storage.database import get_connection as get_main_conn, dict_from_row
 from storage.workspace import (
     get_active_path, switch_workspace, create_workspace,
@@ -23,6 +21,7 @@ router = APIRouter()
 def list_workspaces():
     """列出所有工作区 + 当前活跃信息。"""
     conn = get_main_conn()
+    active_path = get_active_path()
 
     # 确保 workspaces 表存在
     conn.executescript("""
@@ -31,15 +30,44 @@ def list_workspaces():
             name        TEXT NOT NULL,
             db_path     TEXT NOT NULL,
             paper_count INTEGER DEFAULT 0,
+            item_count  INTEGER DEFAULT 0,
             created_at  TEXT DEFAULT (datetime('now')),
             opened_at   TEXT DEFAULT (datetime('now'))
         );
     """)
+    columns = {row[1] for row in conn.execute("PRAGMA table_info(workspaces)").fetchall()}
+    if "item_count" not in columns:
+        conn.execute("ALTER TABLE workspaces ADD COLUMN item_count INTEGER DEFAULT 0")
+
+    active_conn = get_active_connection()
+    try:
+        paper_count = active_conn.execute("SELECT COUNT(*) FROM papers").fetchone()[0]
+        item_count = active_conn.execute("SELECT COUNT(*) FROM items").fetchone()[0]
+    finally:
+        active_conn.close()
+    existing = conn.execute(
+        "SELECT id FROM workspaces WHERE db_path = ?", (active_path,)
+    ).fetchone()
+    if existing:
+        conn.execute(
+            "UPDATE workspaces SET paper_count = ?, item_count = ? WHERE id = ?",
+            (paper_count, item_count, existing["id"]),
+        )
+    else:
+        conn.execute(
+            "INSERT INTO workspaces (name, db_path, paper_count, item_count) VALUES (?, ?, ?, ?)",
+            (
+                os.path.basename(active_path).removesuffix(".db"),
+                active_path,
+                paper_count,
+                item_count,
+            ),
+        )
+    conn.commit()
 
     rows = conn.execute("SELECT * FROM workspaces ORDER BY opened_at DESC").fetchall()
     conn.close()
 
-    active_path = get_active_path()
     return {
         "active_path": active_path,
         "active_name": os.path.basename(active_path).replace(".db", ""),
@@ -69,22 +97,20 @@ def create_workspace_api(name: str = ""):
 @router.post("/workspaces/load")
 def load_workspace_api(db_path: str = ""):
     """切换到指定工作区。"""
-    if not db_path or not os.path.isfile(db_path):
+    if not db_path or not switch_workspace(db_path):
         raise HTTPException(status_code=404, detail="工作区文件不存在")
-
-    if not switch_workspace(db_path):
-        raise HTTPException(status_code=500, detail="切换失败")
+    active_path = get_active_path()
 
     # 更新最后打开时间
     conn = get_main_conn()
     conn.execute(
         "UPDATE workspaces SET opened_at = ? WHERE db_path = ?",
-        (datetime.now().strftime("%Y-%m-%d %H:%M"), db_path),
+        (datetime.now().strftime("%Y-%m-%d %H:%M"), active_path),
     )
     conn.commit()
     conn.close()
 
-    return {"ok": True, "db_path": db_path}
+    return {"ok": True, "db_path": active_path}
 
 
 @router.delete("/workspaces/{workspace_id}")
@@ -122,14 +148,32 @@ async def import_workspace(file: UploadFile = File(...)):
         raise HTTPException(status_code=400, detail="请上传 .db 文件")
 
     _ensure_dir_ws()
-    safe_name = file.filename.replace(" ", "_").replace("/", "_")
+    safe_name = os.path.basename(file.filename).replace(" ", "_").replace("\\", "_")
+    stem, suffix = os.path.splitext(safe_name)
     dest = os.path.join(str(WORKSPACE_DIR), safe_name)
+    index = 1
+    while os.path.exists(dest):
+        dest = os.path.join(str(WORKSPACE_DIR), f"{stem}_{index}{suffix}")
+        index += 1
 
-    with open(dest, "wb") as f:
-        shutil.copyfileobj(file.file, f)
+    temp_dest = f"{dest}.upload"
+    size = 0
+    try:
+        with open(temp_dest, "wb") as output:
+            while chunk := await file.read(1024 * 1024):
+                size += len(chunk)
+                if size > 100 * 1024 * 1024:
+                    raise HTTPException(status_code=413, detail="工作区文件不能超过 100 MB")
+                output.write(chunk)
+        _validate_workspace_file(temp_dest)
+        os.replace(temp_dest, dest)
+    except Exception:
+        if os.path.exists(temp_dest):
+            os.remove(temp_dest)
+        raise
 
     # 注册到主DB
-    display_name = safe_name.replace(".db", "")
+    display_name = os.path.basename(dest).removesuffix(".db")
     conn = get_main_conn()
     existing = conn.execute("SELECT id FROM workspaces WHERE db_path = ?", (dest,)).fetchone()
     if not existing:
@@ -148,6 +192,28 @@ def _ensure_dir_ws():
     WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def _validate_workspace_file(path: str):
+    """Reject non-SQLite files and databases without the workspace schema."""
+    try:
+        with open(path, "rb") as uploaded:
+            if uploaded.read(16) != b"SQLite format 3\x00":
+                raise ValueError("not sqlite")
+        conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        try:
+            tables = {row[0] for row in conn.execute(
+                "SELECT name FROM sqlite_master WHERE type = 'table'"
+            )}
+        finally:
+            conn.close()
+        if not {"papers", "crawl_tasks"}.issubset(tables):
+            raise ValueError("missing workspace tables")
+    except (OSError, sqlite3.DatabaseError, ValueError) as exc:
+        raise HTTPException(
+            status_code=400,
+            detail="不是有效的 ResearchMate 工作区数据库",
+        ) from exc
+
+
 @router.post("/workspaces/current/clear")
 def clear_current_workspace():
     """清空当前工作区论文数据。"""
@@ -156,7 +222,7 @@ def clear_current_workspace():
     active_path = get_active_path()
     conn = get_main_conn()
     conn.execute(
-        "UPDATE workspaces SET paper_count = 0 WHERE db_path = ?",
+        "UPDATE workspaces SET paper_count = 0, item_count = 0 WHERE db_path = ?",
         (active_path,),
     )
     conn.commit()
@@ -164,8 +230,6 @@ def clear_current_workspace():
 
     return {"ok": True}
 
-
-from pydantic import BaseModel
 
 class ReviewRequest(BaseModel):
     prompt: str = ""
@@ -181,7 +245,7 @@ async def trigger_workspace_review(body: ReviewRequest = ReviewRequest()):
     api_key = config_get("ai", "api_key")
     model = config_get("ai", "model") or "unknown"
 
-    if not api_key:
+    if not api_key and api_type != "ollama":
         return {
             "ok": False,
             "error": "未配置 API Key",
@@ -279,4 +343,3 @@ async def trigger_workspace_review(body: ReviewRequest = ReviewRequest()):
             "keywords_used": kw_summary[:100],
         },
     }
-

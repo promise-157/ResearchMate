@@ -1,7 +1,7 @@
 <template>
   <div class="crawl-control card">
     <div class="control-header flex-between">
-      <h3 class="section-title" style="margin-bottom:0">爬取控制</h3>
+      <h3 class="section-title" style="margin-bottom:0">来源同步</h3>
       <el-button size="small" type="primary" plain @click="$emit('add-source')">
         + 添加期刊源
       </el-button>
@@ -65,14 +65,14 @@
         :disabled="selectedIds.length === 0"
         @click="$emit('crawl-start', selectedIds, mode, keywords, sortMode)"
       >
-        开始爬取已选的 {{ selectedIds.length }} 个源
+        同步已选的 {{ selectedIds.length }} 个源
       </el-button>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 
 const props = defineProps({
   sources: { type: Array, default: () => [] },
@@ -84,6 +84,16 @@ const selectedIds = ref(props.sources.map((s) => s.id))
 const mode = ref('new')
 const keywords = ref('')
 const sortMode = ref('newest')
+
+watch(
+  () => props.sources.map((source) => source.id),
+  (ids) => {
+    const valid = selectedIds.value.filter((id) => ids.includes(id))
+    const added = ids.filter((id) => !selectedIds.value.includes(id))
+    selectedIds.value = [...valid, ...added]
+  },
+  { immediate: true },
+)
 
 function toggleSource(id) {
   const idx = selectedIds.value.indexOf(id)

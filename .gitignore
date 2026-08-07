@@ -9,12 +9,30 @@ venv/
 .venv/
 env/
 .env
+.env.*
+!.env.example
+!.env.*.example
 *.whl
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
 
 # === Node / Frontend ===
 node_modules/
 dist/
 .vite/
+test-results/
+playwright-report/
+blob-report/
+.eslintcache
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
 *.local
 
 # === IDE & Editors ===
@@ -26,6 +44,7 @@ dist/
 .project
 .classpath
 .settings/
+.history/
 
 # === OS ===
 .DS_Store
@@ -33,6 +52,7 @@ Thumbs.db
 ehthumbs.db
 
 # === Project: ResearchMate ===
+# Legacy Claude-only files are not project instructions. Codex uses AGENTS.md.
 CLAUDE.md
 .claude/
 memory/
@@ -43,9 +63,29 @@ logs/
 *.log
 src/temp/
 
+# Credentials and private keys must never enter a public repository.
+*.pem
+*.key
+*.p12
+*.pfx
+credentials*.json
+secrets*.json
+
 # === Data (keep structure, ignore contents) ===
 src/data/*
 !src/data/.gitignore
+
+# Local workspace databases and their SQLite journal/WAL sidecars.
+*.db
+*.db-*
+*.sqlite
+*.sqlite3
+*.sqlite-*
+
+# User-created exports/backups may contain private material or assets.
+/backups/
+/exports/
+/uploads/
 
 # === Temp / Drafts ===
 /tmp/

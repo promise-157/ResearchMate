@@ -13,6 +13,7 @@ def get_stats():
     conn = get_connection()
 
     paper_count = conn.execute("SELECT COUNT(*) FROM papers").fetchone()[0]
+    material_count = conn.execute("SELECT COUNT(*) FROM items").fetchone()[0]
     cart_count = conn.execute("SELECT COUNT(*) FROM papers WHERE in_cart = 1").fetchone()[0]
 
     last_session = conn.execute(
@@ -22,6 +23,7 @@ def get_stats():
     conn.close()
 
     return Stats(
+        material_count=material_count,
         paper_count=paper_count,
         cart_count=cart_count,
         last_update=last_session["created_at"] if last_session else None,

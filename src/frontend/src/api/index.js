@@ -50,6 +50,98 @@ export function updatePaper(id, data) {
   return api.patch(`/papers/${id}`, data)
 }
 
+// ---- 通用资料 ----
+export function fetchItems(params) {
+  return api.get('/items', { params })
+}
+
+export function createItem(data) {
+  return api.post('/items', data)
+}
+
+export function fetchItem(id) {
+  return api.get(`/items/${id}`)
+}
+
+export function updateItem(id, data) {
+  return api.patch(`/items/${id}`, data)
+}
+
+export function fetchItemAnalysisRuns(id) {
+  return api.get(`/items/${id}/analysis-runs`)
+}
+
+export function createItemAnalysisRun(id, data) {
+  return api.post(`/items/${id}/analysis-runs`, data)
+}
+
+export function fetchComparisonRuns() {
+  return api.get('/items/analysis-comparisons')
+}
+
+export function createComparisonRun(data) {
+  return api.post('/items/analysis-comparisons', data)
+}
+
+export function importImage(file, title = '') {
+  const form = new FormData()
+  form.append('file', file)
+  form.append('title', title)
+  return api.post('/items/import-image', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+}
+
+export function runItemOcr(id) {
+  return api.post(`/items/${id}/ocr-runs`)
+}
+
+export function acceptItemExtraction(itemId, runId) {
+  return api.post(`/items/${itemId}/extraction-runs/${runId}/accept`)
+}
+
+export function fetchItemTemplate(id) {
+  return api.get(`/items/${id}/template`)
+}
+
+export function extractItemTemplate(id) {
+  return api.post(`/items/${id}/template/extract`)
+}
+
+export function confirmItemTemplate(id, data) {
+  return api.put(`/items/${id}/template/confirmation`, data)
+}
+
+export function fetchSimilarItems(id, params) {
+  return api.get(`/items/${id}/similar`, { params })
+}
+
+export function createUrlImport(url) {
+  return api.post('/url-imports', { url }, { timeout: 35000 })
+}
+
+export function fetchUrlImports() {
+  return api.get('/url-imports')
+}
+
+export function discoverArxiv(query, limit = 10) {
+  return api.post('/discoveries/arxiv', { query, limit }, { timeout: 30000 })
+}
+
+export function fetchCollectionJobs() {
+  return api.get('/collection-jobs')
+}
+
+export function fetchCandidates(params) {
+  return api.get('/candidates', { params })
+}
+
+export function acceptCandidate(id) {
+  return api.post(`/candidates/${id}/accept`)
+}
+
+export function rejectCandidate(id) {
+  return api.post(`/candidates/${id}/reject`)
+}
+
 // ---- 购物车 ----
 export function fetchCart() {
   return api.get('/cart')

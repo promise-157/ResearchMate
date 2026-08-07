@@ -2,7 +2,7 @@
 爬虫基类。所有爬虫继承此类，实现 can_handle / crawl。
 """
 from abc import ABC, abstractmethod
-from typing import List, Dict, Optional
+from typing import Dict, List
 
 
 class BaseCrawler(ABC):

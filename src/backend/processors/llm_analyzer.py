@@ -4,7 +4,6 @@ LLM 分析器。调用 OpenAI 兼容 API 分析论文摘要。
 """
 import json
 import re
-import asyncio
 from typing import List, Dict, Optional
 
 import httpx
@@ -53,6 +52,10 @@ class LLMAnalyzer(BaseProcessor):
         timeout = config_get("crawler", "timeout") or 120
         return httpx.AsyncClient(timeout=timeout)
 
+    def _has_credentials(self) -> bool:
+        return (config_get("ai", "api_type") == "ollama" or
+                bool((config_get("ai", "api_key") or "").strip()))
+
     def _api_params(self) -> dict:
         """构建 API 请求参数。"""
         api_type = config_get("ai", "api_type") or "openai"
@@ -81,8 +84,7 @@ class LLMAnalyzer(BaseProcessor):
                     "technologies": "[]", "analyzed": True}
 
         # 检查是否有 API key
-        api_key = config_get("ai", "api_key")
-        if not api_key:
+        if not self._has_credentials():
             return {"has_code": False, "code_url": None, "innovation": None,
                     "technologies": "[]", "analyzed": False}
 
@@ -103,8 +105,7 @@ class LLMAnalyzer(BaseProcessor):
 
     async def review_with_prompt(self, prompt: str) -> Optional[str]:
         """直接发送自定义 prompt，返回 AI 回复文本。"""
-        api_key = config_get("ai", "api_key")
-        if not api_key:
+        if not self._has_credentials():
             print("[llm] WARNING: API key not configured")
             return None
         result = await self._call_llm(prompt)
@@ -138,23 +139,21 @@ class LLMAnalyzer(BaseProcessor):
 
     async def chat(self, prompt: str) -> Optional[str]:
         """对话模式，返回原始文本（不解析 JSON）。"""
-        api_key = config_get("ai", "api_key")
-        if not api_key:
+        if not self._has_credentials():
             return None
         return await self._call_llm_raw(prompt)
 
     async def _call_llm_raw(self, prompt: str) -> Optional[str]:
         """调用 LLM API，返回原始响应文本。"""
-        api_key = config_get("ai", "api_key")
-        if not api_key or api_key.strip() == "":
+        api_key = config_get("ai", "api_key") or ""
+        if not self._has_credentials():
             return None
 
         params = self._api_params()
         api_type = params["api_type"]
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
-        }
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
         if api_type == "claude":
             headers["x-api-key"] = api_key
             headers["anthropic-version"] = "2023-06-01"
@@ -185,17 +184,16 @@ class LLMAnalyzer(BaseProcessor):
 
     async def _call_llm(self, prompt: str) -> Optional[Dict]:
         """调用 LLM API，返回解析后的 JSON 字典。"""
-        api_key = config_get("ai", "api_key")
-        if not api_key:
+        api_key = config_get("ai", "api_key") or ""
+        if not self._has_credentials():
             print("[llm] WARNING: API key not configured, skipping analysis")
             return None
 
         params = self._api_params()
 
-        headers = {
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {api_key}",
-        }
+        headers = {"Content-Type": "application/json"}
+        if api_key:
+            headers["Authorization"] = f"Bearer {api_key}"
 
         # Anthropic 需要特殊 header
         api_type = params["api_type"]
@@ -224,10 +222,6 @@ class LLMAnalyzer(BaseProcessor):
         try:
             async with self._get_client() as client:
                 # 如果 API key 为空，跳过
-                if not api_key or api_key.strip() == "":
-                    print("[llm] API key is empty, skipping")
-                    return None
-
                 resp = await client.post(params["url"], headers=headers, json=body)
 
                 if resp.status_code != 200:

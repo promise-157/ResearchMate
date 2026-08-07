@@ -16,13 +16,5 @@ export const useSettingsStore = defineStore('settings', () => {
     timeout: 30,
   })
 
-  function loadSettings() {
-    // TODO: 从后端 API 加载设置
-  }
-
-  function saveSettings() {
-    // TODO: 保存设置到后端 API
-  }
-
-  return { theme, aiConfig, crawlConfig, loadSettings, saveSettings }
+  return { theme, aiConfig, crawlConfig }
 })

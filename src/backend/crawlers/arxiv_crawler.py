@@ -5,7 +5,7 @@ arXiv API 爬虫。使用 arXiv 官方 API (Atom XML) 获取论文元数据。
 import re
 import xml.etree.ElementTree as ET
 from typing import List, Dict
-from urllib.parse import urlencode, urlparse
+from urllib.parse import urlparse
 
 import httpx
 
@@ -23,20 +23,21 @@ class ArxivCrawler(BaseCrawler):
         return "arxiv"
 
     def can_handle(self, url: str) -> bool:
-        return "arxiv.org" in url
+        parsed = urlparse(url)
+        host = (parsed.hostname or "").lower().rstrip(".")
+        return ((host == "arxiv.org" or host.endswith(".arxiv.org")) and
+                bool(re.fullmatch(r"/list/[\w.-]+(?:/(?:recent|new|pastweek))?/", parsed.path.rstrip("/") + "/")))
 
     async def crawl(self, url: str, mode: str = "new", keywords: str = "", sort_mode: str = "newest") -> List[Dict]:
         """
         从 arXiv URL 爬取论文。
         """
-        category, year = self._parse_list_url(url)
+        category, _ = self._parse_list_url(url)
+        if not category:
+            raise ValueError("Unsupported arXiv URL; use a category list URL")
+        return await self._crawl_by_category(category, mode, keywords, sort_mode)
 
-        if category:
-            return await self._crawl_by_category(category, year, mode, keywords, sort_mode)
-        else:
-            return await self._crawl_generic(url, mode)
-
-    async def _crawl_by_category(self, category: str, year: str = None, mode: str = "new", keywords: str = "", sort_mode: str = "newest") -> List[Dict]:
+    async def _crawl_by_category(self, category: str, mode: str = "new", keywords: str = "", sort_mode: str = "newest") -> List[Dict]:
         """按分类爬取论文，支持关键词搜索和排序。"""
         max_results = config_get("crawler", "max_papers_per_source") or 50
 
@@ -69,33 +70,16 @@ class ArxivCrawler(BaseCrawler):
 
         return self._parse_atom(resp.text, category)
 
-    async def _crawl_generic(self, url: str, mode: str = "new") -> List[Dict]:
-        """通用爬取 — 尝试从 arXiv 页面提取论文。"""
-        timeout = config_get("crawler", "timeout") or 30
-        async with httpx.AsyncClient(timeout=timeout, follow_redirects=True) as client:
-            resp = await client.get(url)
-            resp.raise_for_status()
-
-        # 如果是单个论文页 (arxiv.org/abs/...)，直接解析
-        text = resp.text
-        papers = self._parse_abs_page(text)
-        if papers:
-            return papers
-
-        # 否则当作列表页
-        return self._parse_listing_page(text)
-
     def _parse_list_url(self, url: str) -> tuple:
         """从 arXiv 列表 URL 中提取分类和年份。"""
         parsed = urlparse(url)
         path = parsed.path
 
-        # /list/cs.AI/recent 或 /list/cs.AI/2024
-        m = re.search(r'/list/([\w.-]+)(?:/(\d{4}|recent))?', path)
+        # /list/cs.AI/recent, /new, /pastweek, or category root.
+        m = re.fullmatch(r'/list/([\w.-]+)(?:/(recent|new|pastweek))?/?', path)
         if m:
             category = m.group(1)
-            year = m.group(2) if m.group(2) and m.group(2) != "recent" else None
-            return category, year
+            return category, None
 
         # /abs/1706.03762 → 单个论文
         return None, None
@@ -161,88 +145,6 @@ class ArxivCrawler(BaseCrawler):
                 "has_code": has_code,
                 "code_url": code_url,
             })
-
-        return papers
-
-    def _parse_abs_page(self, html: str) -> List[Dict]:
-        """解析单个论文页面 (arxiv.org/abs/xxx)。"""
-        from bs4 import BeautifulSoup
-        soup = BeautifulSoup(html, "lxml")
-
-        title_tag = soup.find("h1", class_="title")
-        if not title_tag:
-            return []
-        title = title_tag.get_text(strip=True).replace("Title:", "").strip()
-
-        authors_tag = soup.find("div", class_="authors")
-        authors = []
-        if authors_tag:
-            for a in authors_tag.find_all("a"):
-                authors.append(a.get_text(strip=True))
-
-        abstract_tag = soup.find("blockquote", class_="abstract")
-        abstract = ""
-        if abstract_tag:
-            abstract = abstract_tag.get_text(strip=True).replace("Abstract:", "").strip()
-
-        # Detect code in abstract + page
-        full_text = abstract + " " + html[:5000]
-        has_code, code_url = self._detect_code(full_text)
-
-        return [{
-            "title": title,
-            "authors": self._to_json_str(authors),
-            "abstract": abstract,
-            "journal_name": "arXiv",
-            "publish_year": None,
-            "arxiv_id": None,
-            "paper_url": None,
-            "has_code": has_code,
-            "code_url": code_url,
-        }]
-
-    def _parse_listing_page(self, html: str) -> List[Dict]:
-        """解析 arXiv 列表页。"""
-        from bs4 import BeautifulSoup
-        soup = BeautifulSoup(html, "lxml")
-        papers = []
-
-        for dl in soup.find_all("dl"):
-            for dt in dl.find_all("dt"):
-                link = dt.find("a", href=re.compile(r'/abs/'))
-                if not link:
-                    continue
-                arxiv_id = link.get_text(strip=True).replace("arXiv:", "")
-                title = link.get("title", "").strip() or link.get_text(strip=True)
-
-                # Try to find abstract in sibling dd
-                dd = dt.find_next_sibling("dd")
-                abstract = ""
-                authors = []
-                if dd:
-                    abstract_div = dd.find("div", class_="list-comments")
-                    if abstract_div:
-                        abstract = abstract_div.get_text(strip=True)[:500]
-                    # Authors are usually in the dd text before any div
-                    authors_text = dd.get_text(separator=" ", strip=True)
-                    # Simple heuristic: text before first div content
-                    authors_raw = dd.find(string=True, recursive=False)
-                    if authors_raw:
-                        authors = [a.strip() for a in authors_raw.split(",") if a.strip()]
-
-                has_code, code_url = self._detect_code(abstract)
-
-                papers.append({
-                    "title": title,
-                    "authors": self._to_json_str(authors),
-                    "abstract": abstract[:2000] if abstract else "",
-                    "journal_name": "arXiv",
-                    "publish_year": None,
-                    "arxiv_id": arxiv_id,
-                    "paper_url": f"https://arxiv.org/abs/{arxiv_id}",
-                    "has_code": has_code,
-                    "code_url": code_url,
-                })
 
         return papers
 

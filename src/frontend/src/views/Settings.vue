@@ -55,7 +55,7 @@
             <div class="data-row flex-between">
               <div>
                 <div class="data-label">数据库位置</div>
-                <div class="data-value text-secondary">src/data/researchmate.db</div>
+                <div class="data-value text-secondary">src/data/（主数据库 + workspaces/）</div>
               </div>
             </div>
 
@@ -71,23 +71,12 @@
               </el-button>
             </div>
 
-            <el-divider />
-
-            <div class="data-row flex-between">
-              <div>
-                <div class="data-label">重置所有设置</div>
-                <div class="data-value text-secondary">恢复所有设置项为默认值</div>
-              </div>
-              <el-button type="danger" plain @click="confirmResetAll">
-                重置设置
-              </el-button>
-            </div>
           </div>
         </div>
 
         <!-- Save / Reset bar -->
         <div class="settings-actions">
-          <el-button type="primary" @click="handleSave" :loading="saving">保存设置</el-button>
+          <el-button type="primary" @click="handleSave()" :loading="saving">保存设置</el-button>
           <el-button @click="handleReset">重置为默认</el-button>
           <span v-if="saveMsg" class="save-msg" :class="saveMsgType">{{ saveMsg }}</span>
         </div>
@@ -102,7 +91,7 @@ import { ElMessageBox, ElMessage } from 'element-plus'
 import ThemeSwitch from '@/components/ThemeSwitch.vue'
 import AIConfig from '@/components/AIConfig.vue'
 import CrawlConfig from '@/components/CrawlConfig.vue'
-import { fetchSettings, updateSettings } from '@/api'
+import { fetchSettings, updateSettings, clearWorkspace } from '@/api'
 import { useSettingsStore } from '@/stores/settings'
 
 const settingsStore = useSettingsStore()
@@ -119,6 +108,7 @@ onMounted(async () => {
       settingsStore.aiConfig.apiType = data.ai.api_type
       settingsStore.aiConfig.apiBaseUrl = data.ai.api_base_url
       settingsStore.aiConfig.model = data.ai.model
+      settingsStore.aiConfig._hasKey = !!data.ai.has_key
       // Don't override apiKey - it's not returned by server for security
     }
     if (data.crawl) {
@@ -129,16 +119,23 @@ onMounted(async () => {
   } catch { /* server may not be running */ }
 })
 
-async function handleSave() {
+async function handleSave(clearKey = false) {
   saving.value = true
   saveMsg.value = ''
   try {
-    await updateSettings({
-      ai: {
+    const ai = {
         api_type: settingsStore.aiConfig.apiType,
-        api_key: settingsStore.aiConfig.apiKey,
         api_base_url: settingsStore.aiConfig.apiBaseUrl,
         model: settingsStore.aiConfig.model,
+    }
+    if (settingsStore.aiConfig.apiKey) ai.api_key = settingsStore.aiConfig.apiKey
+    if (clearKey) ai.clear_api_key = true
+    await updateSettings({
+      ai,
+      crawl: {
+        max_papers_per_source: settingsStore.crawlConfig.maxPapersPerSource,
+        request_interval: settingsStore.crawlConfig.requestInterval,
+        timeout: settingsStore.crawlConfig.timeout,
       },
     })
     saveMsg.value = '✓ 设置已保存'
@@ -160,7 +157,8 @@ async function handleReset() {
     settingsStore.aiConfig = { apiType: 'openai', apiKey: '', apiBaseUrl: 'https://api.openai.com/v1', model: 'gpt-4o' }
     settingsStore.crawlConfig = { maxPapersPerSource: 50, requestInterval: 2, timeout: 30 }
     settingsStore.theme = 'system'
-    ElMessage.success('已重置')
+    await handleSave(true)
+    ElMessage.success('已恢复并保存默认设置')
   } catch { /* cancelled */ }
 }
 
@@ -171,20 +169,11 @@ async function confirmClearPapers() {
       '确认清空',
       { confirmButtonText: '确定清空', cancelButtonText: '取消', type: 'warning' }
     )
-    ElMessage.info('清空论文功能将在后端实现后接入')
+    await clearWorkspace()
+    ElMessage.success('当前工作区已清空')
   } catch { /* cancelled */ }
 }
 
-async function confirmResetAll() {
-  try {
-    await ElMessageBox.confirm(
-      '此操作将恢复所有设置为默认值。确定继续？',
-      '确认重置',
-      { confirmButtonText: '确定重置', cancelButtonText: '取消', type: 'warning' }
-    )
-    ElMessage.info('重置设置功能将在后端实现后接入')
-  } catch { /* cancelled */ }
-}
 </script>
 
 <style scoped>

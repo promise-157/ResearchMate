@@ -31,7 +31,7 @@
 <script setup>
 import { ref } from 'vue'
 
-const props = defineProps({
+defineProps({
   keywords: { type: Array, default: () => [] },
 })
 

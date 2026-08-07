@@ -5,7 +5,6 @@
 import re
 import json
 from collections import Counter
-from pathlib import Path
 from typing import List, Tuple
 
 # === 预置 ML/DL 术语词库 ===
@@ -16,7 +15,7 @@ TECH_TERMS = {
     "cnn", "rnn", "lstm", "gru", "gan", "vae", "diffusion model",
     "u-net", "resnet", "vit", "vision transformer", "mlp", "mamba",
     "state space model", "moe", "mixture of experts", "encoder", "decoder",
-    "autoencoder", "gan", "graph neural network", "gnn", "reinforcement learning",
+    "autoencoder", "graph neural network", "gnn", "reinforcement learning",
     "rlhf", "ppo", "dqn", "actor-critic", "policy gradient",
     # 训练技术
     "fine-tuning", "pre-training", "transfer learning", "few-shot", "zero-shot",
@@ -65,7 +64,7 @@ _NON_TECH_WORDS = {
     "THAT", "THAN", "THEN", "WHEN", "WERE", "BEEN", "BEING", "DOES",
     "WILL", "WOULD", "COULD", "SHOULD", "MAY", "MIGHT", "MUST",
     "DUE", "VIA", "PER", "BASED", "GIVEN", "HOWEVER", "THUS",
-    "YET", "STILL", "JUST", "ONLY", "ALSO", "EVEN", "MUCH",
+    "YET", "STILL", "JUST", "ONLY", "EVEN", "MUCH",
     "WELL", "FIRST", "NEXT", "LAST", "SAME", "SUCH", "EACH",
     "BOTH", "FEW", "MORE", "MOST", "LESS", "MANY", "SOME",
     "ANY", "NO", "NONE", "OTHER", "OWN", "MAIN", "REAL",
