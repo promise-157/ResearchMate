@@ -24,7 +24,7 @@ Vue UI -> /api -> application service -> repository -> workspace SQLite
 
 通用字段使用正式列；领域扩展字段使用有 schema 版本的 JSON。高频查询字段在模板稳定后提升为正式列或索引，避免无边界 EAV，也避免为每个场景复制表。
 
-当前第一个模板是 `debug` schema v1。标签规则只读取本地正文，提取错误、环境、尝试、根因和方案；每次重新提取写审计运行并只替换 `extracted_json`，`confirmed_json` 只能由用户动作修改。近似文本使用本地 `token-jaccard-v1`，结果和共同 token 证据写入 `item_relations`；它不是语义向量检索。
+当前真实模板是 `debug` schema v1 和 `job` schema v1。Debug 提取错误、环境、尝试、根因和方案；求职提取公司、岗位、地区、薪资、技能、经验年限和投递状态。两个模板由一个最小注册层分派共同的读取、提取审计和确认流程，字段定义与行标签提取规则仍属于各自领域模块。每次重新提取只替换 `extracted_json`，`confirmed_json` 只能由用户动作修改；列表筛选使用确认值优先的有效值。近似文本使用本地 `token-jaccard-v1`，结果和共同 token 证据写入 `item_relations`；它不是语义向量检索。
 
 ## 数据不变量
 
@@ -58,7 +58,13 @@ Vue UI -> /api -> application service -> repository -> workspace SQLite
 
 处理失败不得制造结果。真实网络和真实 AI 不进入自动测试。
 
-当前 M8 只允许把成功的本地 OCR 文本接受到通用接受层。接受动作校验资料归属、运行状态、`provider=local` 和受支持的运行类型；同一资料同一提取类型只保留一个当前采用版本，旧运行继续留在 `extraction_runs`。Debug 模板仍使用自己的确定性提取/用户确认分层，不通过这一入口提前抽象。
+AI provider 以外部 API 为主路径。DeepSeek 已有具名 OpenAI-compatible Chat Completions 适配器和独立脱敏错误映射；结构化任务使用 JSON Output 并继续执行本地 schema 校验。通用资料成功运行保存服务商返回模型、输入/输出 token、耗时和可用请求标识。Key 可来自环境变量或设置页：默认安全模式只保留在进程内；用户明确选择便利模式后才允许明文写入已被 Git 忽略的 `src/backend/config.yaml`，文件权限收紧为 `0600`，界面必须显示路径与风险，切回安全模式或清除时立即删除磁盘副本。环境变量优先且不能由网页删除。SQLite、日志、运行记录和错误响应不得包含 Key、完整输入正文或未经脱敏的模型响应。设置页连接测试只能由用户明确点击，并在发送固定最小请求前提示可能费用；页面加载不得自动探测。Ollama 仅连接用户已经运行的实例，不属于默认依赖，也不得由应用自动下载模型。
+
+论文分析、工作区综述和聊天目前仍保留兼容 route/storage 语义，但选择 DeepSeek/兼容接口时已复用同一安全 HTTP 适配器；它们尚未拥有与通用资料相同的运行审计。现状路径和 M11 迁移边界见 [AI_PATHS.md](AI_PATHS.md)。
+
+真实服务商调用和真实来源访问属于显式、受控的环境验收：使用无敏感 fixture、限制请求次数和输入/输出、提前说明可能费用，并把发现的响应形状与错误转成离线回归 fixture；真实调用不进入普通测试或 CI。
+
+当前通用接受层只允许接受成功的本地 OCR 文本。接受动作校验资料归属、运行状态、`provider=local` 和受支持的运行类型；同一资料同一提取类型只保留一个当前采用版本，旧运行继续留在 `extraction_runs`。Debug 与求职的结构化模板值继续使用 `item_template_data` 的确定性提取/用户确认分层，不与 OCR 文本接受入口混合。
 
 ## 完成定义
 

@@ -78,6 +78,29 @@
         @keyup.enter="applyFilters"
         @clear="applyFilters"
       />
+      <template v-if="filters.item_type === 'job'">
+        <el-input
+          v-model="filters.job_company"
+          placeholder="按公司筛选"
+          clearable
+          @keyup.enter="applyFilters"
+          @clear="applyFilters"
+        />
+        <el-input
+          v-model="filters.job_role"
+          placeholder="按岗位筛选"
+          clearable
+          @keyup.enter="applyFilters"
+          @clear="applyFilters"
+        />
+        <el-input
+          v-model="filters.job_application_status"
+          placeholder="按投递状态筛选"
+          clearable
+          @keyup.enter="applyFilters"
+          @clear="applyFilters"
+        />
+      </template>
       <el-button @click="applyFilters">搜索</el-button>
     </div>
 
@@ -225,28 +248,28 @@
           类型建议：{{ typeLabel(selected.metadata?.classification?.suggested_type || 'general') }}
           · 方法：{{ selected.metadata?.classification?.method || '未知' }}
         </p>
-        <section v-if="selected.item_type === 'debug'" class="template-panel">
+        <section v-if="templateDefinition" class="template-panel">
           <el-divider />
           <div class="section-head">
             <div>
-              <h3>Debug 模板</h3>
+              <h3>{{ templateDefinition.title }}</h3>
               <p class="text-small text-secondary">本地规则提取与用户确认分层保存；重新提取不会覆盖确认值。</p>
             </div>
             <el-button size="small" :loading="templateExtracting" @click="rerunTemplateExtraction">重新本地提取</el-button>
           </div>
           <p v-if="templateLoading" class="text-small text-secondary">正在加载模板…</p>
-          <el-form v-else-if="debugTemplate" label-position="top">
-            <el-form-item v-for="field in debugFields" :key="field.key" :label="field.label">
+          <el-form v-else-if="itemTemplate" label-position="top">
+            <el-form-item v-for="field in templateDefinition.fields" :key="field.key" :label="field.label">
               <el-input
                 v-model="templateDraft[field.key]"
                 type="textarea"
                 :rows="2"
-                :placeholder="debugTemplate.extracted?.[field.key] || '本地规则未提取到内容'"
+                :placeholder="itemTemplate.extracted?.[field.key] || '本地规则未提取到内容'"
                 maxlength="4000"
               />
               <p class="field-source text-small text-secondary">
-                本地提取：{{ debugTemplate.extracted?.[field.key] || '—' }}
-                <span v-if="debugTemplate.confirmed?.[field.key]"> · 当前采用用户确认值</span>
+                本地提取：{{ itemTemplate.extracted?.[field.key] || '—' }}
+                <span v-if="itemTemplate.confirmed?.[field.key]"> · 当前采用用户确认值</span>
               </p>
             </el-form-item>
             <el-button type="primary" :loading="templateSaving" @click="saveTemplateConfirmation">保存用户确认值</el-button>
@@ -312,6 +335,12 @@
               <p class="text-small text-secondary">
                 范围：{{ scopeLabel(run.input_scope) }} · {{ run.provider }}/{{ run.model }} · 提示词 {{ run.prompt_version }}
               </p>
+              <p v-if="run.provider_model || run.input_tokens != null || run.output_tokens != null || run.duration_ms != null" class="text-small text-secondary">
+                服务商返回：{{ run.provider_model || '未提供模型名' }}
+                · token {{ run.input_tokens ?? '—' }}/{{ run.output_tokens ?? '—' }}
+                · {{ run.duration_ms ?? '—' }} ms
+                <span v-if="run.request_id"> · 请求 {{ run.request_id }}</span>
+              </p>
               <p v-if="run.error_message" class="run-error">{{ run.error_message }}</p>
               <pre v-if="run.result" class="run-result">{{ formatResult(run.result) }}</pre>
             </article>
@@ -340,6 +369,12 @@
         <article v-for="run in comparisonRuns" :key="run.id" class="run-card">
           <div class="run-head"><el-tag :type="run.status === 'succeeded' ? 'success' : 'danger'">{{ runStatusLabel(run.status) }}</el-tag><span>资料 {{ run.input_item_ids?.join('、') }}</span></div>
           <p class="text-small text-secondary">范围：{{ scopeLabel(run.input_scope) }} · 每条正文最多 3,000 字符 · {{ run.provider }}/{{ run.model }}</p>
+          <p v-if="run.provider_model || run.input_tokens != null || run.output_tokens != null || run.duration_ms != null" class="text-small text-secondary">
+            服务商返回：{{ run.provider_model || '未提供模型名' }}
+            · token {{ run.input_tokens ?? '—' }}/{{ run.output_tokens ?? '—' }}
+            · {{ run.duration_ms ?? '—' }} ms
+            <span v-if="run.request_id"> · 请求 {{ run.request_id }}</span>
+          </p>
           <p v-if="run.error_message" class="run-error">{{ run.error_message }}</p>
           <pre v-if="run.result" class="run-result">{{ formatResult(run.result) }}</pre>
         </article>
@@ -418,21 +453,37 @@ const failedCollectionJobs = ref([])
 const showDiscovery = ref(false)
 const discovering = ref(false)
 const discoveryDraft = reactive({ query: '', limit: 10 })
-const debugTemplate = ref(null)
+const itemTemplate = ref(null)
 const templateLoading = ref(false)
 const templateExtracting = ref(false)
 const templateSaving = ref(false)
-const templateDraft = reactive({ error: '', environment: '', attempts: '', root_cause: '', solution: '' })
-const debugFields = [
-  { key: 'error', label: '错误' }, { key: 'environment', label: '环境' },
-  { key: 'attempts', label: '尝试' }, { key: 'root_cause', label: '根因' },
-  { key: 'solution', label: '最终方案' },
-]
+const templateDraft = reactive({})
+const templateDefinitions = {
+  debug: {
+    title: 'Debug 模板',
+    fields: [
+      { key: 'error', label: '错误' }, { key: 'environment', label: '环境' },
+      { key: 'attempts', label: '尝试' }, { key: 'root_cause', label: '根因' },
+      { key: 'solution', label: '最终方案' },
+    ],
+  },
+  job: {
+    title: '求职模板',
+    fields: [
+      { key: 'company', label: '公司' }, { key: 'role', label: '岗位' },
+      { key: 'location', label: '地区' }, { key: 'salary', label: '薪资' },
+      { key: 'skills', label: '技能' }, { key: 'experience', label: '经验年限' },
+      { key: 'application_status', label: '投递状态' },
+    ],
+  },
+}
+const templateDefinition = computed(() => templateDefinitions[selected.value?.item_type] || null)
 const similarLoading = ref(false)
 const similarSearched = ref(false)
 const similarMatches = ref([])
 const filters = reactive({
-  q: '', item_type: '', status: '', debug_error: '', include_accepted_extractions: false,
+  q: '', item_type: '', status: '', debug_error: '', job_company: '', job_role: '',
+  job_application_status: '', include_accepted_extractions: false,
 })
 const draft = reactive({ content_text: '', title: '', item_type: 'auto', tags: '', source_url: '' })
 const analysisDraft = reactive({ analysis_type: 'classify', input_fields: ['title', 'content_text'] })
@@ -464,6 +515,9 @@ async function loadItems() {
       item_type: filters.item_type || undefined,
       status: filters.status || undefined,
       debug_error: filters.item_type === 'debug' ? filters.debug_error || undefined : undefined,
+      job_company: filters.item_type === 'job' ? filters.job_company || undefined : undefined,
+      job_role: filters.item_type === 'job' ? filters.job_role || undefined : undefined,
+      job_application_status: filters.item_type === 'job' ? filters.job_application_status || undefined : undefined,
       include_accepted_extractions: filters.include_accepted_extractions || undefined,
       page: page.value,
       page_size: pageSize,
@@ -493,6 +547,7 @@ function reloadWorkspace() {
   showDetail.value = false
   showComparison.value = false
   selected.value = null
+  itemTemplate.value = null
   analysisRuns.value = []
   Object.assign(analysisDraft, { analysis_type: 'classify', input_fields: ['title', 'content_text'] })
   loadItems()
@@ -560,30 +615,38 @@ async function rejectUrlCandidate(candidate) {
   }
 }
 async function openDetail(item) {
-  selected.value = await fetchItem(item.id)
-  if (!(selected.value.accepted_extractions || []).some((entry) => entry.text_value)) {
-    analysisDraft.input_fields = analysisDraft.input_fields.filter(
-      (field) => field !== 'accepted_extraction',
-    )
+  try {
+    selected.value = await fetchItem(item.id)
+    if (!(selected.value.accepted_extractions || []).some((entry) => entry.text_value)) {
+      analysisDraft.input_fields = analysisDraft.input_fields.filter(
+        (field) => field !== 'accepted_extraction',
+      )
+    }
+    showDetail.value = true
+    itemTemplate.value = null
+    similarMatches.value = []
+    similarSearched.value = false
+    await Promise.all([loadAnalysisRuns(), templateDefinition.value ? loadItemTemplate() : Promise.resolve()])
+  } catch (error) {
+    showDetail.value = false
+    ElMessage.error(error.response?.data?.detail || '资料详情加载失败')
   }
-  showDetail.value = true
-  debugTemplate.value = null
-  similarMatches.value = []
-  similarSearched.value = false
-  await Promise.all([loadAnalysisRuns(), selected.value.item_type === 'debug' ? loadDebugTemplate() : Promise.resolve()])
 }
 
 function applyTemplate(template) {
-  debugTemplate.value = template
-  for (const field of debugFields) templateDraft[field.key] = template.confirmed?.[field.key] || ''
+  itemTemplate.value = template
+  for (const key of Object.keys(templateDraft)) delete templateDraft[key]
+  for (const field of templateDefinition.value?.fields || []) {
+    templateDraft[field.key] = template.confirmed?.[field.key] || ''
+  }
 }
 
-async function loadDebugTemplate() {
+async function loadItemTemplate() {
   templateLoading.value = true
   try {
     applyTemplate(await fetchItemTemplate(selected.value.id))
   } catch (error) {
-    ElMessage.error(error.response?.data?.detail || 'Debug 模板加载失败')
+    ElMessage.error(error.response?.data?.detail || '模板加载失败')
   } finally { templateLoading.value = false }
 }
 

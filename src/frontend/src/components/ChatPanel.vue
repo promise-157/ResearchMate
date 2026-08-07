@@ -11,6 +11,10 @@
       </div>
     </div>
 
+    <div class="chat-capability-note">
+      使用设置中的模型服务；当前不实时联网，只读取你的问题和明确附加的论文摘要。
+    </div>
+
     <!-- Attached papers bar -->
     <div v-if="attachedPapers.length > 0" class="attach-bar">
       <el-tag
@@ -163,6 +167,12 @@ async function send() {
 .chat-title { font-weight: var(--font-weight-medium); }
 .chat-header-right { display: flex; align-items: center; gap: var(--space-sm); }
 .chat-scope { font-size: var(--font-size-xs); color: var(--color-text-secondary); }
+.chat-capability-note {
+  padding: 6px 16px;
+  border-bottom: 1px solid var(--color-border-light);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs);
+}
 
 .attach-bar {
   display: flex; flex-wrap: wrap; gap: 4px;

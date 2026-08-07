@@ -10,6 +10,10 @@ BACKEND_DIR = Path(__file__).resolve().parent
 PROJECT_DIR = BACKEND_DIR.parent
 ROOT_DIR = PROJECT_DIR.parent
 
+
+class ConfigSaveError(RuntimeError):
+    """A safe configuration persistence error that never includes secret values."""
+
 # ---- 默认配置 ----
 DEFAULTS = {
     "server": {
@@ -29,6 +33,7 @@ DEFAULTS = {
     "ai": {
         "api_type": "openai",
         "api_key": "",
+        "key_storage_mode": "session",
         "api_base_url": "https://api.openai.com/v1",
         "model": "gpt-4o",
     },
@@ -90,7 +95,20 @@ def _env_override(config):
 # 构建最终配置
 yaml_config = _load_yaml_config()
 config = _deep_merge(DEFAULTS, yaml_config)
+if config["ai"].get("key_storage_mode") not in {"session", "config"}:
+    config["ai"]["key_storage_mode"] = "session"
+_persisted_api_key = (
+    str(config["ai"].get("api_key") or "")
+    if config["ai"]["key_storage_mode"] == "config"
+    else ""
+)
+config["ai"]["api_key"] = _persisted_api_key
 config = _env_override(config)
+_api_key_source = (
+    "environment" if os.environ.get("RESEARCHMATE_AI_KEY") is not None
+    else "config" if _persisted_api_key
+    else "none"
+)
 
 
 def get(section, key=None):
@@ -108,26 +126,41 @@ def get_db_path():
 
 
 def save_config():
-    """Persist non-secret settings. API keys intentionally remain in memory."""
+    """Persist settings, including an API key only after explicit config opt-in."""
+    config_path = BACKEND_DIR / "config.yaml"
+    temp_path = BACKEND_DIR / "config.yaml.tmp"
     try:
         import yaml
-        config_path = BACKEND_DIR / "config.yaml"
         persisted = _persistable_config(config)
-        with open(config_path, "w") as f:
+        flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+        descriptor = os.open(temp_path, flags, 0o600)
+        with os.fdopen(descriptor, "w") as f:
             yaml.safe_dump(persisted, f, default_flow_style=False, allow_unicode=True)
-    except Exception as e:
-        print(f"[config] save error: {e}")
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(temp_path, config_path)
+        os.chmod(config_path, 0o600)
+    except Exception as exc:
+        try:
+            temp_path.unlink(missing_ok=True)
+        except OSError:
+            pass
+        raise ConfigSaveError("配置文件保存失败，请检查 config.yaml 所在目录权限") from exc
 
 
 def _persistable_config(source):
-    """Return a detached config snapshot with credentials removed."""
+    """Return a detached snapshot honoring the explicit key storage mode."""
     persisted = deepcopy(source)
-    persisted.get("ai", {}).pop("api_key", None)
+    ai = persisted.get("ai", {})
+    if ai.get("key_storage_mode") == "config" and _persisted_api_key:
+        ai["api_key"] = _persisted_api_key
+    else:
+        ai.pop("api_key", None)
     return persisted
 
 
 def scrub_persisted_secrets():
-    """Remove keys written by older versions while preserving other YAML settings."""
+    """Remove legacy plaintext keys unless convenience mode explicitly permits one."""
     config_path = BACKEND_DIR / "config.yaml"
     if not config_path.exists():
         return
@@ -136,25 +169,84 @@ def scrub_persisted_secrets():
         with open(config_path) as source:
             persisted = yaml.safe_load(source) or {}
         ai = persisted.get("ai")
-        if isinstance(ai, dict) and "api_key" in ai:
+        if (
+            isinstance(ai, dict)
+            and "api_key" in ai
+            and ai.get("key_storage_mode") != "config"
+        ):
             ai.pop("api_key", None)
-            with open(config_path, "w") as target:
+            descriptor = os.open(config_path, os.O_WRONLY | os.O_TRUNC, 0o600)
+            os.chmod(config_path, 0o600)
+            with os.fdopen(descriptor, "w") as target:
                 yaml.safe_dump(persisted, target, default_flow_style=False, allow_unicode=True)
     except Exception as exc:
         print(f"[config] could not remove persisted secret: {exc}")
 
 
-def update_ai_config(api_type=None, api_key=None, api_base_url=None, model=None):
-    """Update provider settings; a UI-provided key is session-only."""
-    if api_type is not None:
-        config["ai"]["api_type"] = api_type
-    if api_key is not None:
-        config["ai"]["api_key"] = api_key
-    if api_base_url is not None:
-        config["ai"]["api_base_url"] = api_base_url
-    if model is not None:
-        config["ai"]["model"] = model
-    save_config()
+def get_ai_key_source():
+    return _api_key_source
+
+
+def get_config_path():
+    return str(BACKEND_DIR / "config.yaml")
+
+
+def update_ai_config(
+    api_type=None,
+    api_key=None,
+    key_storage_mode=None,
+    api_base_url=None,
+    model=None,
+):
+    """Update AI settings and honor the user's explicit credential storage choice."""
+    global _api_key_source, _persisted_api_key
+    previous_config = deepcopy(config)
+    previous_persisted_key = _persisted_api_key
+    previous_source = _api_key_source
+    try:
+        if key_storage_mode is not None:
+            if key_storage_mode not in {"session", "config"}:
+                raise ValueError("Key 保存方式无效")
+            if (
+                key_storage_mode == "config"
+                and config["ai"].get("key_storage_mode") != "config"
+                and api_key is None
+                and _api_key_source == "session"
+            ):
+                raise ValueError("切换便利模式时请重新输入 API Key，以确认允许明文保存")
+            config["ai"]["key_storage_mode"] = key_storage_mode
+            if key_storage_mode == "session":
+                _persisted_api_key = ""
+        if api_type is not None:
+            config["ai"]["api_type"] = api_type
+        if api_key is not None:
+            if api_key:
+                config["ai"]["api_key"] = api_key
+                if config["ai"]["key_storage_mode"] == "config":
+                    _persisted_api_key = api_key
+                    _api_key_source = "config"
+                else:
+                    _persisted_api_key = ""
+                    _api_key_source = "session"
+            else:
+                _persisted_api_key = ""
+                environment_key = os.environ.get("RESEARCHMATE_AI_KEY") or ""
+                config["ai"]["api_key"] = environment_key
+                _api_key_source = "environment" if environment_key else "none"
+        elif key_storage_mode == "session" and _api_key_source == "config":
+            # Keep it usable in memory, but remove the plaintext disk copy now.
+            _api_key_source = "session" if config["ai"].get("api_key") else "none"
+        if api_base_url is not None:
+            config["ai"]["api_base_url"] = api_base_url
+        if model is not None:
+            config["ai"]["model"] = model
+        save_config()
+    except Exception:
+        config.clear()
+        config.update(previous_config)
+        _persisted_api_key = previous_persisted_key
+        _api_key_source = previous_source
+        raise
 
 
 def update_crawler_config(max_papers_per_source=None, request_interval=None, timeout=None):

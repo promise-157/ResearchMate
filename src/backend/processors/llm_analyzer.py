@@ -9,6 +9,7 @@ from typing import List, Dict, Optional
 import httpx
 
 from processors.base import BaseProcessor
+from processors.ai_provider import OpenAICompatibleProvider
 from config import get as config_get
 
 SINGLE_PAPER_PROMPT = """你是一个学术论文评审助手。请阅读以下论文的标题和摘要，严格按 JSON 格式回答。
@@ -151,6 +152,15 @@ class LLMAnalyzer(BaseProcessor):
 
         params = self._api_params()
         api_type = params["api_type"]
+        if api_type != "claude":
+            response = await OpenAICompatibleProvider(
+                provider=api_type,
+                api_key=api_key,
+                base_url=config_get("ai", "api_base_url") or "",
+                model=params["model"],
+                timeout_seconds=config_get("crawler", "timeout") or 120,
+            ).complete(prompt, structured=False, max_tokens=1024)
+            return response.content
         headers = {"Content-Type": "application/json"}
         if api_key:
             headers["Authorization"] = f"Bearer {api_key}"
@@ -172,14 +182,14 @@ class LLMAnalyzer(BaseProcessor):
             async with self._get_client() as client:
                 resp = await client.post(params["url"], headers=headers, json=body)
                 if resp.status_code != 200:
-                    print(f"[llm] API error {resp.status_code}: {resp.text[:200]}")
+                    print(f"[llm] Anthropic API returned HTTP {resp.status_code}")
                     return None
                 data = resp.json()
                 if api_type == "claude":
                     return data.get("content", [{}])[0].get("text", "")
                 return data.get("choices", [{}])[0].get("message", {}).get("content", "")
-        except Exception as e:
-            print(f"[llm] Request failed: {e}")
+        except Exception:
+            print("[llm] Anthropic request failed")
             return None
 
     async def _call_llm(self, prompt: str) -> Optional[Dict]:
@@ -190,6 +200,16 @@ class LLMAnalyzer(BaseProcessor):
             return None
 
         params = self._api_params()
+
+        if params["api_type"] != "claude":
+            response = await OpenAICompatibleProvider(
+                provider=params["api_type"],
+                api_key=api_key,
+                base_url=config_get("ai", "api_base_url") or "",
+                model=params["model"],
+                timeout_seconds=config_get("crawler", "timeout") or 120,
+            ).complete(prompt, structured=True, max_tokens=2048)
+            return self._parse_json(response.content)
 
         headers = {"Content-Type": "application/json"}
         if api_key:
@@ -225,7 +245,7 @@ class LLMAnalyzer(BaseProcessor):
                 resp = await client.post(params["url"], headers=headers, json=body)
 
                 if resp.status_code != 200:
-                    print(f"[llm] API error {resp.status_code}: {resp.text[:300]}")
+                    print(f"[llm] Anthropic API returned HTTP {resp.status_code}")
                     return None
 
                 data = resp.json()
@@ -238,8 +258,8 @@ class LLMAnalyzer(BaseProcessor):
 
                 return self._parse_json(text)
 
-        except Exception as e:
-            print(f"[llm] Request failed: {e}")
+        except Exception:
+            print("[llm] Anthropic request failed")
             return None
 
     def _parse_json(self, text: str) -> Optional[Dict]:
@@ -266,5 +286,5 @@ class LLMAnalyzer(BaseProcessor):
                 return json.loads(m.group(0))
             except json.JSONDecodeError:
                 pass
-        print(f"[llm] JSON parse failed. Raw response:\n{text[:500]}")
+        print("[llm] JSON response failed local parsing")
         return None

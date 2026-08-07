@@ -11,6 +11,7 @@ from processors.material_ai import (
     MaterialAIProvider,
     validate_result,
 )
+from processors.ai_provider import AIResponse
 from storage import items as item_repository
 from storage import accepted_extractions as accepted_extraction_repository
 from storage.workspace import get_active_connection
@@ -21,6 +22,18 @@ ALLOWED_INPUT_FIELDS = {
 }
 CONTENT_TEXT_LIMIT = 12_000
 COMPARISON_TEXT_LIMIT = 3_000
+
+
+def _provider_metadata(response: Any) -> dict[str, Any] | None:
+    if not isinstance(response, AIResponse):
+        return None
+    return {
+        "provider_model": response.provider_model,
+        "input_tokens": response.input_tokens,
+        "output_tokens": response.output_tokens,
+        "duration_ms": response.duration_ms,
+        "request_id": response.request_id,
+    }
 
 
 def list_material_runs(item_id: int) -> list[dict[str, Any]] | None:
@@ -93,19 +106,26 @@ async def analyze_material(
             "model": model,
             "prompt_version": prompt_version,
         })
+        provider_result = None
         try:
-            raw_result = await (provider_client or MaterialAIProvider()).analyze(
+            provider_result = await (provider_client or MaterialAIProvider()).analyze(
                 analysis_type, selected_input
+            )
+            raw_result = (
+                provider_result.content
+                if isinstance(provider_result, AIResponse) else provider_result
             )
             result = validate_result(analysis_type, raw_result)
         except Exception as exc:
             message = str(exc).strip()[:1000] or "模型分析失败"
             item_repository.complete_extraction_run(
-                conn, run["id"], error_message=message
+                conn, run["id"], error_message=message,
+                provider_metadata=_provider_metadata(provider_result),
             )
             raise RuntimeError(message) from exc
         completed = item_repository.complete_extraction_run(
-            conn, run["id"], result=result
+            conn, run["id"], result=result,
+            provider_metadata=_provider_metadata(provider_result),
         )
         return completed, False
     finally:
@@ -173,13 +193,26 @@ async def compare_materials(
             "input_item_ids": unique_ids, "provider": provider, "model": model,
             "prompt_version": PROMPT_VERSIONS["compare"],
         })
+        provider_result = None
         try:
-            raw = await (provider_client or MaterialAIProvider()).analyze("compare", {"items": selected})
+            provider_result = await (provider_client or MaterialAIProvider()).analyze(
+                "compare", {"items": selected}
+            )
+            raw = (
+                provider_result.content
+                if isinstance(provider_result, AIResponse) else provider_result
+            )
             result = validate_result("compare", raw)
         except Exception as exc:
             message = str(exc).strip()[:1000] or "模型比较失败"
-            item_repository.complete_extraction_run(conn, run["id"], error_message=message)
+            item_repository.complete_extraction_run(
+                conn, run["id"], error_message=message,
+                provider_metadata=_provider_metadata(provider_result),
+            )
             raise RuntimeError(message) from exc
-        return item_repository.complete_extraction_run(conn, run["id"], result=result), False
+        return item_repository.complete_extraction_run(
+            conn, run["id"], result=result,
+            provider_metadata=_provider_metadata(provider_result),
+        ), False
     finally:
         conn.close()

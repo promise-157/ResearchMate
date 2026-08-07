@@ -10,7 +10,10 @@ ResearchMate 启动脚本。
 import sys
 import os
 import argparse
+import errno
+import re
 import signal
+import shutil
 import socket
 import subprocess
 import webbrowser
@@ -27,38 +30,163 @@ from config import get as config_get  # noqa: E402 - backend path is added above
 _vite_process = None
 
 
+class PortPermissionError(RuntimeError):
+    """The launcher cannot distinguish availability because bind was denied."""
+
+
 def check_port(host, port):
+    """Return True only when the port can be bound; surface permission failures."""
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.settimeout(0.5)
             s.bind((host, port))
             return True
-    except OSError:
+    except OSError as exc:
+        if exc.errno in {errno.EACCES, errno.EPERM}:
+            raise PortPermissionError(
+                f"无权检查或绑定 {host}:{port}；这不是可确认的端口占用"
+            ) from exc
         return False
 
 
+def _parse_pids(output):
+    return {
+        int(value) for value in re.findall(r"(?m)^\s*(\d+)\s*$", output or "")
+        if int(value) != os.getpid()
+    }
+
+
+def _linux_listener_pids(port):
+    pids = set()
+    commands = []
+    if shutil.which("lsof"):
+        commands.append(["lsof", "-t", f"-iTCP:{port}", "-sTCP:LISTEN"])
+    if shutil.which("fuser"):
+        commands.append(["fuser", "-n", "tcp", str(port)])
+    for command in commands:
+        try:
+            result = subprocess.run(
+                command, capture_output=True, text=True, timeout=5, check=False,
+            )
+            if command[0] == "fuser":
+                pids.update(
+                    int(value) for value in re.findall(r"\b\d+\b", result.stdout or "")
+                    if int(value) != os.getpid()
+                )
+            else:
+                pids.update(_parse_pids(result.stdout))
+        except (OSError, subprocess.SubprocessError):
+            continue
+    return pids
+
+
+def _powershell_executable():
+    for name in ("powershell.exe", "powershell", "pwsh"):
+        executable = shutil.which(name)
+        if executable:
+            return executable
+    return None
+
+
+def _windows_listener_pids(port):
+    executable = _powershell_executable()
+    if not executable:
+        return set()
+    command = (
+        f"Get-NetTCPConnection -LocalPort {int(port)} -State Listen "
+        "-ErrorAction SilentlyContinue | "
+        "Select-Object -ExpandProperty OwningProcess -Unique"
+    )
+    try:
+        result = subprocess.run(
+            [executable, "-NoProfile", "-NonInteractive", "-Command", command],
+            capture_output=True, text=True, timeout=10, check=False,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return set()
+    return _parse_pids(result.stdout)
+
+
+def _wait_for_port(host, port, timeout=3):
+    deadline = time.monotonic() + timeout
+    while time.monotonic() < deadline:
+        if check_port(host, port):
+            return True
+        time.sleep(0.1)
+    return check_port(host, port)
+
+
+def _terminate_linux_pids(pids):
+    errors = []
+    for pid in sorted(pids):
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except ProcessLookupError:
+            continue
+        except PermissionError:
+            errors.append(f"无权终止 Linux PID {pid}")
+        except OSError as exc:
+            errors.append(f"终止 Linux PID {pid} 失败：{exc}")
+    return errors
+
+
+def _force_terminate_linux_pids(pids):
+    errors = []
+    for pid in sorted(pids):
+        try:
+            os.kill(pid, signal.SIGKILL)
+        except ProcessLookupError:
+            continue
+        except PermissionError:
+            errors.append(f"无权强制终止 Linux PID {pid}")
+        except OSError as exc:
+            errors.append(f"强制终止 Linux PID {pid} 失败：{exc}")
+    return errors
+
+
+def _terminate_windows_pids(pids):
+    executable = _powershell_executable()
+    if not executable or not pids:
+        return ["无法调用 PowerShell 终止 Windows listener"]
+    pid_list = ",".join(str(pid) for pid in sorted(pids))
+    command = f"Stop-Process -Id {pid_list} -Force -ErrorAction Stop"
+    try:
+        result = subprocess.run(
+            [executable, "-NoProfile", "-NonInteractive", "-Command", command],
+            capture_output=True, text=True, timeout=10, check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        return [f"调用 PowerShell 失败：{exc}"]
+    if result.returncode == 0:
+        return []
+    return ["Windows listener 终止失败；请以 PowerShell 管理员身份检查该 PID"]
+
+
 def kill_port(host, port):
-    import subprocess as sp
-    try:
-        r = sp.run(["fuser", "-k", f"{port}/tcp"], capture_output=True, text=True, timeout=5)
-        if r.returncode == 0:
-            time.sleep(0.5)
-            return True
-    except Exception:
-        pass
-    try:
-        r = sp.run(["lsof", "-t", f"-i:{port}"], capture_output=True, text=True, timeout=5)
-        for pid in r.stdout.strip().split():
-            try:
-                os.kill(int(pid), signal.SIGTERM)
-            except Exception:
-                pass
-        if r.stdout.strip():
-            time.sleep(0.5)
-            return True
-    except Exception:
-        pass
-    return False
+    """Terminate the exact Linux or Windows listener and verify the port is free."""
+    messages = []
+    linux_pids = _linux_listener_pids(port)
+    if linux_pids:
+        print(f"  找到 Linux listener PID: {', '.join(map(str, sorted(linux_pids)))}")
+        messages.extend(_terminate_linux_pids(linux_pids))
+        if _wait_for_port(host, port):
+            return True, "Linux listener 已终止"
+        messages.extend(_force_terminate_linux_pids(linux_pids))
+        if _wait_for_port(host, port):
+            return True, "Linux listener 已强制终止"
+
+    windows_pids = _windows_listener_pids(port)
+    if windows_pids:
+        print(f"  找到 Windows listener PID: {', '.join(map(str, sorted(windows_pids)))}")
+        messages.extend(_terminate_windows_pids(windows_pids))
+        if _wait_for_port(host, port):
+            return True, "Windows listener 已终止"
+
+    if not linux_pids and not windows_pids:
+        messages.append("未找到可终止的 Linux/Windows listener；可能需要管理员权限")
+    elif not messages:
+        messages.append("listener 在终止后仍占用端口；请检查其是否被服务管理器自动重启")
+    return False, "；".join(messages)
 
 
 def ensure_frontend_built():
@@ -100,7 +228,10 @@ def start_vite():
         stderr=subprocess.DEVNULL,
     )
     for _ in range(10):
-        if check_port("127.0.0.1", vite_port):
+        if _vite_process.poll() is not None:
+            print("  ⚠ Vite 进程提前退出，请在前端目录单独运行 npm run dev 查看错误")
+            return
+        if not check_port("127.0.0.1", vite_port):
             time.sleep(0.5)
             return
         time.sleep(0.5)
@@ -136,21 +267,29 @@ def main():
     port = config_get("server", "port")
 
     # 端口占用处理
-    if not check_port(host, port):
+    try:
+        port_available = check_port(host, port)
+    except PortPermissionError as exc:
+        print(f"  ✗ {exc}")
+        print("  请检查安全软件/沙箱权限，或在普通 WSL/终端中启动")
+        sys.exit(1)
+    if not port_available:
         print(f"  ⚠ 端口 {port} 已被占用", end="")
         if args.kill or sys.stdout.isatty():
             if args.kill or input(" → 杀掉旧进程重新启动？[Y/n] ").strip().lower() != "n":
                 print("  正在清理...")
-                if kill_port(host, port):
-                    print("  ✓ 已清理")
+                cleared, detail = kill_port(host, port)
+                if cleared:
+                    print(f"  ✓ 已清理（{detail}）")
                 else:
-                    print("  ✗ 清理失败，请手动: pkill -f 'python run.py'")
+                    print(f"  ✗ 清理失败：{detail}")
+                    print(f"  可保留原进程并改用其他端口：RESEARCHMATE_PORT={port + 1} python run.py --no-browser")
                     sys.exit(1)
             else:
                 print("  已取消")
                 sys.exit(0)
         else:
-            print("\n  请手动: pkill -f 'python run.py'  或  python run.py --kill")
+            print("\n  使用 python run.py --kill 明确清理 listener，或设置 RESEARCHMATE_PORT 改用其他端口")
             sys.exit(1)
 
     # 开发模式

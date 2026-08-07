@@ -10,11 +10,15 @@ from services.material_analysis import (
 from services.materials import get_material, import_text_material, list_materials, update_material
 from services.image_materials import get_asset_file, import_image_material, run_local_ocr
 from services.accepted_extractions import accept_extraction
-from services.debug_templates import confirm_debug_template, extract_debug_template, get_debug_template
+from services.template_registry import (
+    confirm_item_template as confirm_template,
+    extract_item_template as extract_template,
+    get_item_template as get_template,
+)
 from services.similarity import find_similar_items
 from storage.models import (
-    DebugTemplateConfirmation, MaterialAnalysisRequest, MaterialComparisonRequest,
-    MaterialCreate, MaterialUpdate,
+    MaterialAnalysisRequest, MaterialComparisonRequest, MaterialCreate, MaterialUpdate,
+    TemplateConfirmationRequest,
 )
 
 
@@ -77,6 +81,8 @@ def create_item(body: MaterialCreate, response: Response):
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     response.status_code = http_status.HTTP_201_CREATED if created else http_status.HTTP_200_OK
     return {"created": created, "duplicate": not created, "item": item}
 
@@ -87,6 +93,9 @@ def list_items(
     item_type: str | None = Query(None),
     status: str | None = Query(None),
     debug_error: Annotated[str | None, Query(max_length=200)] = None,
+    job_company: Annotated[str | None, Query(max_length=200)] = None,
+    job_role: Annotated[str | None, Query(max_length=200)] = None,
+    job_application_status: Annotated[str | None, Query(max_length=200)] = None,
     include_accepted_extractions: bool = Query(False),
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
@@ -100,6 +109,9 @@ def list_items(
         item_type=item_type,
         status=status,
         debug_error=debug_error,
+        job_company=job_company,
+        job_role=job_role,
+        job_application_status=job_application_status,
         include_accepted_extractions=include_accepted_extractions,
         page=page,
         page_size=page_size,
@@ -117,9 +129,11 @@ def get_item(item_id: int):
 @router.get("/items/{item_id}/template")
 def get_item_template(item_id: int):
     try:
-        template = get_debug_template(item_id)
+        template = get_template(item_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if not template:
         raise HTTPException(status_code=404, detail="资料不存在")
     return template
@@ -128,20 +142,24 @@ def get_item_template(item_id: int):
 @router.post("/items/{item_id}/template/extract")
 def extract_item_template(item_id: int):
     try:
-        template = extract_debug_template(item_id)
+        template = extract_template(item_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if not template:
         raise HTTPException(status_code=404, detail="资料不存在")
     return template
 
 
 @router.put("/items/{item_id}/template/confirmation")
-def confirm_item_template(item_id: int, body: DebugTemplateConfirmation):
+def confirm_item_template(item_id: int, body: TemplateConfirmationRequest):
     try:
-        template = confirm_debug_template(item_id, body.model_dump())
+        template = confirm_template(item_id, body.root)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except RuntimeError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if not template:
         raise HTTPException(status_code=404, detail="资料不存在")
     return template

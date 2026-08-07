@@ -3,7 +3,6 @@ import json
 import sqlite3
 from typing import Any, Optional
 
-
 def _decode(row: sqlite3.Row | None) -> Optional[dict[str, Any]]:
     if row is None:
         return None
@@ -60,6 +59,9 @@ def list_items(
     item_type: str | None = None,
     status: str | None = None,
     debug_error: str | None = None,
+    job_company: str | None = None,
+    job_role: str | None = None,
+    job_application_status: str | None = None,
     include_accepted_extractions: bool = False,
     page: int = 1,
     page_size: int = 20,
@@ -89,6 +91,22 @@ def list_items(
             "items.item_type = 'debug' AND lower(COALESCE("
             "NULLIF(json_extract(item_template_data.confirmed_json, '$.error'), ''), "
             "json_extract(item_template_data.extracted_json, '$.error'), '')) "
+            "LIKE lower(?) ESCAPE '\\'"
+        )
+        params.append(f"%{escaped}%")
+    for field, value in (
+        ("company", job_company),
+        ("role", job_role),
+        ("application_status", job_application_status),
+    ):
+        if not value:
+            continue
+        escaped = value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+        clauses.append(
+            "items.item_type = 'job' AND item_template_data.template_key = 'job' "
+            "AND lower(COALESCE(NULLIF(json_extract("
+            f"item_template_data.confirmed_json, '$.{field}'), ''), "
+            f"json_extract(item_template_data.extracted_json, '$.{field}'), '')) "
             "LIKE lower(?) ESCAPE '\\'"
         )
         params.append(f"%{escaped}%")
@@ -234,16 +252,24 @@ def complete_extraction_run(
     *,
     result: dict[str, Any] | None = None,
     error_message: str | None = None,
+    provider_metadata: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     status = "succeeded" if error_message is None else "failed"
     conn.execute(
         """UPDATE extraction_runs
-           SET status = ?, result_json = ?, error_message = ?
+           SET status = ?, result_json = ?, error_message = ?,
+               provider_model = ?, input_tokens = ?, output_tokens = ?,
+               duration_ms = ?, request_id = ?
            WHERE id = ?""",
         (
             status,
             json.dumps(result, ensure_ascii=False) if result is not None else None,
             error_message,
+            provider_metadata.get("provider_model") if provider_metadata else None,
+            provider_metadata.get("input_tokens") if provider_metadata else None,
+            provider_metadata.get("output_tokens") if provider_metadata else None,
+            provider_metadata.get("duration_ms") if provider_metadata else None,
+            provider_metadata.get("request_id") if provider_metadata else None,
             run_id,
         ),
     )

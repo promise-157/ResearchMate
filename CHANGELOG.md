@@ -12,10 +12,15 @@
 - Completed the first M6 vertical slice with a versioned Debug template, deterministic audited extraction, user-confirmed overrides, dedicated error filtering, and explainable local near-text relations.
 - Completed the first M7 discovery slice with bounded arXiv API search, persistent multi-candidate jobs, review-before-import, provenance, and offline Atom fixtures.
 - Completed M8 with explicit OCR preview/acceptance into an independent deterministic extraction layer, opt-in accepted-text search/AI scopes, and offline Playwright coverage for refresh and workspace switching.
+- Completed M9 with a versioned job template, audited local extraction, confirmation-preserving reprocessing, company/role/application-status filtering, and a shared template registry/renderer proven by Debug and job use cases.
+- Completed M10 with named DeepSeek OpenAI-compatible Chat Completions, JSON Output plus local schema validation, redacted actionable errors, explicit connection testing, provider metadata audit fields, offline provider/API/browser fixtures, and an authorization-gated real smoke test for classification, extraction, comparison and persisted usage metadata.
+- Hardened `run.py` port recovery with permission-aware bind checks, exact Linux listener termination, WSL/Windows PowerShell fallback, post-termination verification, actionable fallback guidance, and corrected Vite readiness detection.
+- Reprioritized the post-M9 roadmap around a DeepSeek-first external API path, followed by unified auditable paper/material/chat AI, OCR quality and controlled real-network validation; local model runtimes remain optional and unbundled.
 - Added generic material, asset, extraction, relation, and collection-job schemas with idempotent workspace migration.
 - Added concise Codex startup guidance (`AGENTS.md`), product/architecture contracts, and a verified current roadmap.
 - Disabled generic HTML collection by default and allowlisted the supported arXiv adapter.
 - Kept UI-entered AI keys in process memory, removed direct browser-to-provider requests, and narrowed local API CORS.
+- Added an explicit Key storage choice: safe session-only mode by default, or opt-in plaintext `config.yaml` convenience mode with path/risk disclosure, `0600` permissions, restart loading, and one-click removal.
 - Made AI attachments explicit and bounded; fixed synchronous completion reporting for shortlist analysis.
 - Fixed source/task provenance, refresh-mode metadata updates, workspace counts, settings persistence, CSV export, and several placeholder controls.
 - Added core safety and data-flow contract tests.

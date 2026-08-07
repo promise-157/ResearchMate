@@ -2,7 +2,7 @@
 import sqlite3
 
 
-MATERIAL_SCHEMA_VERSION = 7
+MATERIAL_SCHEMA_VERSION = 8
 
 
 def _add_column_if_missing(
@@ -98,6 +98,11 @@ def ensure_material_schema(conn: sqlite3.Connection) -> None:
             error_message   TEXT,
             provider        TEXT,
             model           TEXT,
+            provider_model  TEXT,
+            input_tokens    INTEGER,
+            output_tokens   INTEGER,
+            duration_ms     INTEGER,
+            request_id      TEXT,
             prompt_version  TEXT,
             created_at      TEXT NOT NULL DEFAULT (datetime('now'))
         );
@@ -187,6 +192,14 @@ def ensure_material_schema(conn: sqlite3.Connection) -> None:
     _add_column_if_missing(
         conn, "extraction_runs", "input_item_ids_json", "TEXT NOT NULL DEFAULT '[]'"
     )
+    for column, definition in (
+        ("provider_model", "TEXT"),
+        ("input_tokens", "INTEGER"),
+        ("output_tokens", "INTEGER"),
+        ("duration_ms", "INTEGER"),
+        ("request_id", "TEXT"),
+    ):
+        _add_column_if_missing(conn, "extraction_runs", column, definition)
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_extractions_reuse "
         "ON extraction_runs(item_id, run_kind, input_hash, status)"

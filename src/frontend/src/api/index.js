@@ -168,6 +168,10 @@ export function updateSettings(data) {
   return api.put('/settings', data)
 }
 
+export function testAIConnection() {
+  return api.post('/settings/ai/test', {}, { timeout: 35000 })
+}
+
 // ---- 统计 ----
 export function fetchStats() {
   return api.get('/stats')

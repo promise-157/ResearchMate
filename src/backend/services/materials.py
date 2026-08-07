@@ -98,9 +98,9 @@ def import_text_material(
             },
             "content_hash": content_hash,
         })
-        if item["item_type"] == "debug":
-            from services.debug_templates import extract_debug_template_with_connection
-            extract_debug_template_with_connection(conn, item)
+        if item["item_type"] in {"debug", "job"}:
+            from services.template_registry import extract_template_with_connection
+            extract_template_with_connection(conn, item)
         _update_workspace_item_count(
             conn.execute("SELECT COUNT(*) FROM items").fetchone()[0]
         )

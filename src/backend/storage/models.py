@@ -1,7 +1,7 @@
 """
 Pydantic 数据模型。定义 API 请求/响应的数据结构。
 """
-from pydantic import AnyHttpUrl, BaseModel, Field
+from pydantic import AnyHttpUrl, BaseModel, Field, RootModel, field_validator
 from typing import Annotated, Optional, List, Literal
 
 
@@ -159,12 +159,15 @@ class PublicURLImportRequest(BaseModel):
     url: str = Field(min_length=1, max_length=2_000)
 
 
-class DebugTemplateConfirmation(BaseModel):
-    error: Optional[str] = Field(None, max_length=4_000)
-    environment: Optional[str] = Field(None, max_length=4_000)
-    attempts: Optional[str] = Field(None, max_length=4_000)
-    root_cause: Optional[str] = Field(None, max_length=4_000)
-    solution: Optional[str] = Field(None, max_length=4_000)
+class TemplateConfirmationRequest(RootModel[dict[str, Optional[str]]]):
+    @field_validator("root")
+    @classmethod
+    def validate_template_fields(cls, value):
+        if len(value) > 20:
+            raise ValueError("模板字段不能超过 20 个")
+        if any(field_value is not None and len(field_value) > 4_000 for field_value in value.values()):
+            raise ValueError("模板字段不能超过 4000 个字符")
+        return value
 
 
 class ArxivDiscoveryRequest(BaseModel):

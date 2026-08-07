@@ -54,6 +54,89 @@ class SecretConfigTests(unittest.TestCase):
         self.assertNotIn("api_key", persisted["ai"])
         self.assertEqual(runtime["ai"]["api_key"], "secret")
 
+    def test_config_mode_persists_key_and_session_mode_removes_it(self):
+        previous_config = config.config
+        previous_key = config._persisted_api_key
+        previous_source = config._api_key_source
+        try:
+            config.config = {
+                "ai": {"api_key": "", "key_storage_mode": "session"},
+                "crawler": {},
+            }
+            config._persisted_api_key = ""
+            with patch("config.save_config") as save:
+                config.update_ai_config(
+                    api_key="fixture-secret", key_storage_mode="config"
+                )
+                persisted = config._persistable_config(config.config)
+                self.assertEqual(persisted["ai"]["api_key"], "fixture-secret")
+                self.assertEqual(config.get_ai_key_source(), "config")
+
+                config.update_ai_config(key_storage_mode="session")
+                safe = config._persistable_config(config.config)
+                self.assertNotIn("api_key", safe["ai"])
+                self.assertEqual(config.get("ai", "api_key"), "fixture-secret")
+                self.assertEqual(config.get_ai_key_source(), "session")
+                self.assertEqual(save.call_count, 2)
+        finally:
+            config.config = previous_config
+            config._persisted_api_key = previous_key
+            config._api_key_source = previous_source
+
+    def test_config_file_is_owner_only_and_plaintext_is_opt_in(self):
+        previous_dir = config.BACKEND_DIR
+        previous_config = config.config
+        previous_key = config._persisted_api_key
+        previous_source = config._api_key_source
+        try:
+            with tempfile.TemporaryDirectory() as tmp:
+                config.BACKEND_DIR = Path(tmp)
+                config.config = {
+                    "ai": {"api_key": "", "key_storage_mode": "session"},
+                    "crawler": {},
+                }
+                config._persisted_api_key = ""
+                config.update_ai_config(
+                    api_key="fixture-secret", key_storage_mode="config"
+                )
+                config_path = Path(tmp) / "config.yaml"
+                self.assertEqual(config_path.stat().st_mode & 0o777, 0o600)
+                self.assertIn("fixture-secret", config_path.read_text())
+
+                config.update_ai_config(key_storage_mode="session")
+                self.assertNotIn("fixture-secret", config_path.read_text())
+                self.assertNotIn("api_key:", config_path.read_text())
+        finally:
+            config.BACKEND_DIR = previous_dir
+            config.config = previous_config
+            config._persisted_api_key = previous_key
+            config._api_key_source = previous_source
+
+    def test_failed_save_rolls_back_runtime_and_persisted_key(self):
+        previous_config = config.config
+        previous_key = config._persisted_api_key
+        previous_source = config._api_key_source
+        try:
+            config.config = {
+                "ai": {"api_key": "old", "key_storage_mode": "session"},
+                "crawler": {},
+            }
+            config._persisted_api_key = ""
+            config._api_key_source = "session"
+            with patch("config.save_config", side_effect=config.ConfigSaveError("失败")):
+                with self.assertRaises(config.ConfigSaveError):
+                    config.update_ai_config(
+                        api_key="fixture-new", key_storage_mode="config"
+                    )
+            self.assertEqual(config.get("ai", "api_key"), "old")
+            self.assertEqual(config.get("ai", "key_storage_mode"), "session")
+            self.assertEqual(config._persisted_api_key, "")
+            self.assertEqual(config.get_ai_key_source(), "session")
+        finally:
+            config.config = previous_config
+            config._persisted_api_key = previous_key
+            config._api_key_source = previous_source
+
 
 class WorkspaceSchemaTests(unittest.TestCase):
     def test_new_workspace_records_source_provenance(self):

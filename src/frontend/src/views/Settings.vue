@@ -109,6 +109,9 @@ onMounted(async () => {
       settingsStore.aiConfig.apiBaseUrl = data.ai.api_base_url
       settingsStore.aiConfig.model = data.ai.model
       settingsStore.aiConfig._hasKey = !!data.ai.has_key
+      settingsStore.aiConfig.keyStorageMode = data.ai.key_storage_mode || 'session'
+      settingsStore.aiConfig.keySource = data.ai.key_source || 'none'
+      settingsStore.aiConfig.configPath = data.ai.config_path || ''
       // Don't override apiKey - it's not returned by server for security
     }
     if (data.crawl) {
@@ -127,10 +130,11 @@ async function handleSave(clearKey = false) {
         api_type: settingsStore.aiConfig.apiType,
         api_base_url: settingsStore.aiConfig.apiBaseUrl,
         model: settingsStore.aiConfig.model,
+        key_storage_mode: settingsStore.aiConfig.keyStorageMode,
     }
     if (settingsStore.aiConfig.apiKey) ai.api_key = settingsStore.aiConfig.apiKey
     if (clearKey) ai.clear_api_key = true
-    await updateSettings({
+    const result = await updateSettings({
       ai,
       crawl: {
         max_papers_per_source: settingsStore.crawlConfig.maxPapersPerSource,
@@ -138,6 +142,12 @@ async function handleSave(clearKey = false) {
         timeout: settingsStore.crawlConfig.timeout,
       },
     })
+    if (result.ai) {
+      settingsStore.aiConfig._hasKey = !!result.ai.has_key
+      settingsStore.aiConfig.keySource = result.ai.key_source
+      settingsStore.aiConfig.keyStorageMode = result.ai.key_storage_mode
+      settingsStore.aiConfig.configPath = result.ai.config_path
+    }
     saveMsg.value = '✓ 设置已保存'
     saveMsgType.value = 'ok'
   } catch {
@@ -154,7 +164,11 @@ async function handleReset() {
     await ElMessageBox.confirm('确定恢复所有设置为默认值？', '确认重置', {
       confirmButtonText: '确定', cancelButtonText: '取消', type: 'warning',
     })
-    settingsStore.aiConfig = { apiType: 'openai', apiKey: '', apiBaseUrl: 'https://api.openai.com/v1', model: 'gpt-4o' }
+    settingsStore.aiConfig = {
+      apiType: 'openai', apiKey: '', apiBaseUrl: 'https://api.openai.com/v1',
+      model: 'gpt-4o', keyStorageMode: 'session', keySource: 'none', configPath: '',
+      _hasKey: false,
+    }
     settingsStore.crawlConfig = { maxPapersPerSource: 50, requestInterval: 2, timeout: 30 }
     settingsStore.theme = 'system'
     await handleSave(true)

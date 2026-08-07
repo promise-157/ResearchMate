@@ -5,11 +5,12 @@ from typing import Any
 
 from pydantic import BaseModel, Field, ValidationError
 
-from processors.llm_analyzer import LLMAnalyzer
+from config import get as config_get
+from processors.ai_provider import AIResponse, OpenAICompatibleProvider
 
 
 PROCESSOR_NAME = "material_ai"
-PROCESSOR_VERSION = "1"
+PROCESSOR_VERSION = "2"
 PROMPT_VERSIONS = {
     "classify": "material-classify-v1",
     "extract": "material-extract-v1",
@@ -93,8 +94,19 @@ def build_prompt(analysis_type: str, selected_input: dict[str, Any]) -> str:
 class MaterialAIProvider:
     """Backend-only adapter; tests inject a fake provider instead."""
 
-    async def analyze(self, analysis_type: str, selected_input: dict[str, Any]) -> str:
-        raw = await LLMAnalyzer()._call_llm_raw(build_prompt(analysis_type, selected_input))
-        if not raw:
-            raise RuntimeError("模型调用失败；请检查模型名称、API Base URL 和后端日志")
-        return raw
+    async def analyze(
+        self, analysis_type: str, selected_input: dict[str, Any]
+    ) -> AIResponse:
+        provider = config_get("ai", "api_type") or "openai"
+        if provider == "claude":
+            raise ValueError("通用资料结构化分析暂不支持 Claude；请选择 DeepSeek 或兼容接口")
+        client = OpenAICompatibleProvider(
+            provider=provider,
+            api_key=config_get("ai", "api_key") or "",
+            base_url=config_get("ai", "api_base_url") or "",
+            model=config_get("ai", "model") or "",
+            timeout_seconds=config_get("crawler", "timeout") or 120,
+        )
+        return await client.complete(
+            build_prompt(analysis_type, selected_input), structured=True
+        )

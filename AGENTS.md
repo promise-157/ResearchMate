@@ -24,7 +24,7 @@ ResearchMate is a local-first personal information workspace, not a paper-only a
 
 ## Safety and privacy
 
-- Never inspect, print, commit, or send credentials. Keys come from environment variables or the settings UI and are never persisted.
+- Never inspect, print, commit, or expose credentials. Keys may come from environment variables or the settings UI. Settings default to session-only storage; an explicit convenience mode may persist the Key in ignored `src/backend/config.yaml` only after showing the plaintext risk and path. Switching back to safe mode or clearing the Key must remove that disk copy. Never persist Keys in SQLite, logs, audit records, test fixtures containing real secrets, or tracked files.
 - The frontend calls only `/api/*`; source and AI provider requests stay in the backend.
 - Never silently send a workspace or local asset to an external AI. Show and bound the selected scope.
 - Prefer user imports, documented public APIs, RSS, and normal public-page access. Do not bypass authentication, paywalls, CAPTCHAs, robots rules, rate limits, or access controls.

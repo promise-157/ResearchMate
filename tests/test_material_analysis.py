@@ -19,6 +19,7 @@ from storage import items as item_repository
 from storage.models import MaterialAnalysisRequest
 from storage.workspace import _init_workspace_db
 from storage.workspace_schema import ensure_material_schema
+from processors.ai_provider import AIResponse
 
 
 class FakeProvider:
@@ -29,6 +30,16 @@ class FakeProvider:
     async def analyze(self, analysis_type, selected_input):
         self.calls.append((analysis_type, selected_input))
         return self.response
+
+
+class MetadataProvider(FakeProvider):
+    async def analyze(self, analysis_type, selected_input):
+        self.calls.append((analysis_type, selected_input))
+        return AIResponse(
+            content=self.response, provider_model="deepseek-v4-pro-202608",
+            input_tokens=42, output_tokens=17, duration_ms=123,
+            request_id="req-material", finish_reason="stop",
+        )
 
 
 class MaterialAnalysisTests(unittest.IsolatedAsyncioTestCase):
@@ -101,6 +112,23 @@ class MaterialAnalysisTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(first["id"], second["id"])
         self.assertEqual(len(fake.calls), 1)
 
+    async def test_provider_metadata_is_audited(self):
+        item = self.create_item()
+        fake = MetadataProvider(json.dumps({
+            "summary": "Python 后端岗位", "tags": ["Python"], "fields": {}
+        }))
+        with patch("services.material_analysis.get_active_connection", side_effect=self.connect), \
+             patch("services.material_analysis.config_get", side_effect=self.configured):
+            run, _ = await analyze_material(
+                item["id"], analysis_type="extract", input_fields=["content_text"],
+                provider_client=fake,
+            )
+        self.assertEqual(run["provider_model"], "deepseek-v4-pro-202608")
+        self.assertEqual(run["input_tokens"], 42)
+        self.assertEqual(run["output_tokens"], 17)
+        self.assertEqual(run["duration_ms"], 123)
+        self.assertEqual(run["request_id"], "req-material")
+
     async def test_accepted_extraction_is_sent_only_when_explicitly_selected(self):
         item = self.create_item()
         conn = self.connect()
@@ -135,7 +163,7 @@ class MaterialAnalysisTests(unittest.IsolatedAsyncioTestCase):
 
     async def test_invalid_model_output_records_failure(self):
         item = self.create_item()
-        fake = FakeProvider('{"suggested_type":"job","confidence":4}')
+        fake = MetadataProvider('{"suggested_type":"job","confidence":4}')
         with patch("services.material_analysis.get_active_connection", side_effect=self.connect), \
              patch("services.material_analysis.config_get", side_effect=self.configured):
             with self.assertRaisesRegex(RuntimeError, "结构校验"):
@@ -147,6 +175,8 @@ class MaterialAnalysisTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(runs[0]["status"], "failed")
         self.assertIsNone(runs[0]["result"])
         self.assertIn("结构校验", runs[0]["error_message"])
+        self.assertEqual(runs[0]["provider_model"], "deepseek-v4-pro-202608")
+        self.assertEqual(runs[0]["input_tokens"], 42)
 
     async def test_missing_configuration_is_actionable_and_calls_no_provider(self):
         item = self.create_item()
@@ -222,6 +252,9 @@ class MaterialAnalysisTests(unittest.IsolatedAsyncioTestCase):
         conn.close()
         self.assertIn("input_scope_json", columns)
         self.assertIn("input_item_ids_json", columns)
+        self.assertTrue({
+            "provider_model", "input_tokens", "output_tokens", "duration_ms", "request_id"
+        }.issubset(columns))
         self.assertEqual(row, ("old", "[]"))
 
 

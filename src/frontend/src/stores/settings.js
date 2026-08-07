@@ -6,6 +6,9 @@ export const useSettingsStore = defineStore('settings', () => {
   const aiConfig = ref({
     apiType: 'openai',
     apiKey: '',
+    keyStorageMode: 'session',
+    keySource: 'none',
+    configPath: '',
     apiBaseUrl: 'https://api.openai.com/v1',
     model: 'gpt-4o',
     _hasKey: false,
