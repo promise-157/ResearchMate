@@ -34,6 +34,8 @@
       }"
     />
 
+    <WorkspaceReviewPanel :papers="papers" />
+
     <PaperFilterBar @filter-change="handleFilter" />
 
     <KeywordFilter
@@ -96,12 +98,14 @@ import CrawlControl from '@/components/CrawlControl.vue'
 import CrawlProgress from '@/components/CrawlProgress.vue'
 import WorkspaceManager from '@/components/WorkspaceManager.vue'
 import ChatPanel from '@/components/ChatPanel.vue'
+import WorkspaceReviewPanel from '@/components/WorkspaceReviewPanel.vue'
 import PaperFilterBar from '@/components/PaperFilterBar.vue'
 import KeywordFilter from '@/components/KeywordFilter.vue'
 import PaperCard from '@/components/PaperCard.vue'
 import PaperDetailModal from '@/components/PaperDetailModal.vue'
 import AddSourceDialog from '@/components/AddSourceDialog.vue'
 import { useCartStore } from '@/stores/cart'
+import { useWorkspaceStore } from '@/stores/workspace'
 import { useSettingsStore } from '@/stores/settings'
 import {
   fetchJournals, addJournal, deleteJournal,
@@ -111,6 +115,7 @@ import {
 } from '@/api'
 
 const cartStore = useCartStore()
+const workspaceStore = useWorkspaceStore()
 const wsManager = ref(null)
 
 function onWorkspaceChanged() {
@@ -127,6 +132,7 @@ async function handleClearWorkspace() {
       confirmButtonText: '确定清空', cancelButtonText: '取消', type: 'warning',
     })
     await clearWorkspace()
+    await workspaceStore.refreshCurrentWorkspace()
     papers.value = []
     totalPapers.value = 0
     workspaceKeywords.value = []
@@ -234,6 +240,7 @@ function openDetail(paper) {
 }
 
 async function handleToggleCart(paper) {
+  const generation = workspaceStore.generation
   const newCartState = !paper.in_cart
   // Optimistic update
   paper.in_cart = newCartState
@@ -244,8 +251,11 @@ async function handleToggleCart(paper) {
   }
   // Persist to backend
   try {
-    await updatePaper(paper.id, { in_cart: newCartState })
+    await workspaceStore.runMutation(
+      () => updatePaper(paper.id, { in_cart: newCartState }),
+    )
   } catch {
+    if (generation !== workspaceStore.generation) return
     // Rollback on failure
     paper.in_cart = !newCartState
     if (newCartState) cartStore.removeItem(paper.id)

@@ -1,17 +1,15 @@
 """工作区管理 API"""
 import os
-import json as _json
 import sqlite3
-from collections import Counter
 from datetime import datetime
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse
-from pydantic import BaseModel
 from storage.database import get_connection as get_main_conn, dict_from_row
 from storage.workspace import (
     get_active_path, switch_workspace, create_workspace,
     delete_workspace_file, clear_workspace, WORKSPACE_DIR,
     get_active_connection,
+    WorkspaceBusyError,
 )
 
 router = APIRouter()
@@ -123,13 +121,16 @@ def delete_workspace_api(workspace_id: int):
         raise HTTPException(status_code=404, detail="工作区不存在")
 
     db_path = row["db_path"]
+    conn.close()
+    try:
+        delete_workspace_file(db_path)
+    except WorkspaceBusyError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    conn = get_main_conn()
     conn.execute("DELETE FROM workspaces WHERE id = ?", (workspace_id,))
     conn.commit()
     conn.close()
-
-    delete_workspace_file(db_path)
     return {"ok": True}
-
 
 @router.get("/workspace/export")
 def export_workspace():
@@ -217,7 +218,10 @@ def _validate_workspace_file(path: str):
 @router.post("/workspaces/current/clear")
 def clear_current_workspace():
     """清空当前工作区论文数据。"""
-    clear_workspace()
+    try:
+        clear_workspace()
+    except WorkspaceBusyError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
     active_path = get_active_path()
     conn = get_main_conn()
@@ -229,117 +233,3 @@ def clear_current_workspace():
     conn.close()
 
     return {"ok": True}
-
-
-class ReviewRequest(BaseModel):
-    prompt: str = ""
-
-@router.post("/workspace/review")
-async def trigger_workspace_review(body: ReviewRequest = ReviewRequest()):
-    """生成工作区 AI 点评（同步等待，返回结果或错误）。"""
-    from processors.registry import get as get_processor
-    from config import get as config_get
-    custom_prompt = (body.prompt or "").strip()
-
-    api_type = config_get("ai", "api_type") or "openai"
-    api_key = config_get("ai", "api_key")
-    model = config_get("ai", "model") or "unknown"
-
-    if not api_key and api_type != "ollama":
-        return {
-            "ok": False,
-            "error": "未配置 API Key",
-            "hint": "请在「全局设置 → AI 配置」中填写 API Key 并等待自动保存",
-        }
-
-    analyzer = get_processor("llm")
-    if not analyzer:
-        return {"ok": False, "error": "AI 分析器未加载"}
-
-    conn = get_active_connection()
-    papers = conn.execute(
-        "SELECT title, auto_keywords FROM papers"
-    ).fetchall()
-
-    if not papers:
-        conn.close()
-        return {"ok": False, "error": "当前工作区没有论文"}
-
-    papers_list = [dict_from_row(p) for p in papers]
-    conn.close()
-
-    # 关键词统计
-    counter = Counter()
-    for p in papers_list:
-        try:
-            for k in _json.loads(p.get("auto_keywords", "[]")):
-                counter[k] += 1
-        except (_json.JSONDecodeError, TypeError):
-            pass
-
-    top_kw = counter.most_common(20)
-    kw_summary = ", ".join(f"{k}({c})" for k, c in top_kw[:15])
-    title_sample = [p["title"][:100] for p in papers_list[:20]]
-    titles_text = "\n".join(f"{i+1}. {t}" for i, t in enumerate(title_sample))
-
-    # 自定义 prompt 或默认
-    if custom_prompt:
-        prompt = custom_prompt.replace("{keywords}", kw_summary).replace("{titles}", titles_text)
-        if "json" not in prompt.lower() and "JSON" not in prompt:
-            prompt += "\n\n请返回JSON格式，不要附带其他文字。"
-    else:
-        prompt = f"""你是一个学术会议领域主席。请基于以下信息撰写简短综述。
-
-关键词频率: {kw_summary}
-
-论文标题样本 ({len(title_sample)}/{len(papers_list)} 篇):
-{chr(10).join(f'{i+1}. {t}' for i, t in enumerate(title_sample))}
-
-请返回 JSON（不要附带其他文字）：
-{{
-  "hot_topics": "这批论文的热门方向（20-40字）",
-  "recommendations": [
-    {{"title": "论文标题", "reason": "推荐理由（15字以内）"}}
-  ],
-  "tech_trends": "技术趋势关键词（20-40字）"
-}}
-
-注意：recommendations 最多推荐 5 篇。用标题原文，不要翻译。"""
-
-    try:
-        review_text = await analyzer.review_with_prompt(prompt)
-    except Exception as e:
-        return {"ok": False, "error": f"AI 调用失败: {str(e)[:200]}"}
-
-    if not review_text:
-        return {
-            "ok": False,
-            "error": "AI 返回格式异常",
-            "hint": f"请查看终端日志确认 API 连通性 (api_type={api_type}, model={model})。如持续失败，请检查模型名称是否正确或 API Base URL 是否需要调整。",
-        }
-
-    # 保存到 DB
-    conn = get_active_connection()
-    conn.execute(
-        "INSERT INTO workspace_reviews (task_ids, ai_review) VALUES (?, ?)",
-        (_json.dumps([]), review_text),
-    )
-    conn.commit()
-    conn.close()
-
-    # 解析结果返回给前端
-    try:
-        parsed = _json.loads(review_text)
-    except (_json.JSONDecodeError, TypeError):
-        parsed = {"raw": review_text}
-
-    return {
-        "ok": True,
-        "review": parsed,
-        "meta": {
-            "api_type": api_type,
-            "model": model,
-            "paper_count": len(papers_list),
-            "keywords_used": kw_summary[:100],
-        },
-    }

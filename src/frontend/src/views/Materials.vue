@@ -387,6 +387,7 @@
 import { computed, reactive, ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import WorkspaceManager from '@/components/WorkspaceManager.vue'
+import { useWorkspaceStore } from '@/stores/workspace'
 import {
   acceptCandidate,
   acceptItemExtraction,
@@ -418,6 +419,7 @@ const typeOptions = [
   { label: '求职', value: 'job' },
   { label: 'Debug', value: 'debug' },
 ]
+const workspaceStore = useWorkspaceStore()
 const statusOptions = [
   { label: '收件箱', value: 'inbox' },
   { label: '处理中', value: 'active' },
@@ -839,6 +841,7 @@ async function confirmClear() {
       confirmButtonText: '确定清空', cancelButtonText: '取消', type: 'warning',
     })
     await clearWorkspace()
+    await workspaceStore.refreshCurrentWorkspace()
     await loadItems()
     ElMessage.success('当前工作区已清空')
   } catch { /* cancelled */ }

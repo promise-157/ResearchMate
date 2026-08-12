@@ -21,6 +21,10 @@
 - Disabled generic HTML collection by default and allowlisted the supported arXiv adapter.
 - Kept UI-entered AI keys in process memory, removed direct browser-to-provider requests, and narrowed local API CORS.
 - Added an explicit Key storage choice: safe session-only mode by default, or opt-in plaintext `config.yaml` convenience mode with path/risk disclosure, `0600` permissions, restart loading, and one-click removal.
+- Added workspace-local audited paper chat sessions with bounded explicit attachments/history, persistent success/failure and provider metadata, refresh recovery, and workspace isolation.
+- Migrated single and batch cart paper analysis to schema-v10 workspace-local `paper_ai_runs`, with bounded title/abstract scope, per-paper success or redacted failure, provider metadata, refresh/workspace isolation, explicit partial-batch status, and read-only legacy `papers.ai_*` display without mutating paper facts.
+- Completed M11 workspace reviews with explicit confirmation of 2–20 ordered paper IDs and bounded title/abstract fields, one audited `workspace_review` run per request, strict structured results or redacted failures, refresh/workspace isolation, read-only legacy review history, and a shared paper AI run-history component.
+- Hardened workspace transitions with pinned SQLite connections, destructive-action leases, startup recovery of interrupted chat/paper AI runs, a shared frontend generation coordinator, stale-response guards, and repository-owned paper queries.
 - Made AI attachments explicit and bounded; fixed synchronous completion reporting for shortlist analysis.
 - Fixed source/task provenance, refresh-mode metadata updates, workspace counts, settings persistence, CSV export, and several placeholder controls.
 - Added core safety and data-flow contract tests.

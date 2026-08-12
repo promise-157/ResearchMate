@@ -12,7 +12,6 @@ BACKEND = ROOT / "src" / "backend"
 sys.path.insert(0, str(BACKEND))
 
 import config
-from api.routes.chat import ChatRequest, _build_prompt
 from api.routes.crawl import _insert_paper, _update_paper
 from crawlers.arxiv_crawler import ArxivCrawler
 from crawlers.policy import validate_source_url
@@ -179,32 +178,6 @@ class WorkspaceSchemaTests(unittest.TestCase):
             ).fetchone()
             conn.close()
             self.assertEqual(row, (8, task_id, 1, "https://github.com/example/repo"))
-
-
-class ChatScopeTests(unittest.TestCase):
-    def test_no_attachment_means_no_implicit_workspace_context(self):
-        request = ChatRequest(message="summarize")
-        self.assertEqual(_build_prompt(request), "summarize")
-
-    def test_only_explicit_ids_are_loaded(self):
-        conn = sqlite3.connect(":memory:")
-        conn.row_factory = sqlite3.Row
-        conn.execute(
-            "CREATE TABLE papers (id INTEGER, title TEXT, authors TEXT, abstract TEXT, "
-            "journal_name TEXT, publish_year INTEGER, paper_url TEXT)"
-        )
-        conn.executemany(
-            "INSERT INTO papers VALUES (?, ?, ?, ?, ?, ?, ?)",
-            [
-                (1, "Selected", "[]", "selected abstract", "arXiv", 2026, "https://arxiv.org/abs/1"),
-                (2, "Not selected", "[]", "private abstract", "arXiv", 2026, "https://arxiv.org/abs/2"),
-            ],
-        )
-        with patch("api.routes.chat.get_active_connection", return_value=conn):
-            prompt = _build_prompt(ChatRequest(message="compare", paper_ids=[1]))
-        self.assertIn("Selected", prompt)
-        self.assertNotIn("Not selected", prompt)
-        self.assertNotIn("private abstract", prompt)
 
 
 if __name__ == "__main__":

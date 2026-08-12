@@ -105,6 +105,21 @@ class OpenAICompatibleProvider:
         max_tokens: int = 2048,
         thinking: bool | None = None,
     ) -> AIResponse:
+        return await self.complete_messages(
+            [{"role": "user", "content": prompt}],
+            structured=structured,
+            max_tokens=max_tokens,
+            thinking=thinking,
+        )
+
+    async def complete_messages(
+        self,
+        messages: list[dict[str, str]],
+        *,
+        structured: bool,
+        max_tokens: int = 2048,
+        thinking: bool | None = None,
+    ) -> AIResponse:
         if self.provider != "ollama" and not self.api_key.strip():
             raise AIProviderError("missing_key", "尚未配置会话 API Key")
         headers = {"Content-Type": "application/json"}
@@ -112,7 +127,7 @@ class OpenAICompatibleProvider:
             headers["Authorization"] = f"Bearer {self.api_key}"
         body: dict[str, Any] = {
             "model": self.model,
-            "messages": [{"role": "user", "content": prompt}],
+            "messages": messages,
             "temperature": 0.3 if structured else 0.7,
             "max_tokens": max_tokens,
         }

@@ -28,25 +28,26 @@
 
       <el-divider />
 
-      <!-- AI Analysis -->
+      <!-- Read-only legacy AI block. New audited runs live in the cart drawer. -->
       <div v-if="paper.ai_analyzed" class="detail-section">
-        <h4>🤖 AI 分析</h4>
+        <h4>🤖 旧兼容 AI 结果（只读）</h4>
+        <p class="text-secondary">新分析不会更新这些旧字段；统一审计运行请在购物车中查看。</p>
 
         <div class="ai-detail-row">
-          <span class="ai-detail-label">开源代码</span>
+          <span class="ai-detail-label">来源代码事实</span>
           <span v-if="paper.has_code" class="tag-has-code">
             🔗 <a :href="paper.code_url" target="_blank">{{ paper.code_url }}</a>
           </span>
-          <span v-else class="tag-no-code">摘要未提及代码</span>
+          <span v-else class="tag-no-code">来源没有代码记录</span>
         </div>
 
         <div class="ai-detail-row">
-          <span class="ai-detail-label">创新点</span>
+          <span class="ai-detail-label">旧创新分析</span>
           <p class="ai-detail-text">{{ paper.ai_innovation }}</p>
         </div>
 
         <div class="ai-detail-row">
-          <span class="ai-detail-label">技术栈</span>
+          <span class="ai-detail-label">旧技术标签</span>
           <div class="tech-tags-list">
             <el-tag v-for="tag in parseList(paper.ai_technologies)" :key="tag" size="small">
               {{ tag }}
@@ -54,7 +55,7 @@
           </div>
         </div>
       </div>
-      <div v-else class="detail-section text-secondary">尚未进行 AI 分析</div>
+      <div v-else class="detail-section text-secondary">统一审计分析请在购物车中运行和查看</div>
     </template>
 
     <template #footer>

@@ -32,30 +32,30 @@
       <span v-if="paper.arxiv_id" class="paper-arxiv">arXiv:{{ paper.arxiv_id }}</span>
     </div>
 
-    <!-- AI Analysis block -->
+    <!-- Read-only legacy AI block. New audited runs live in the cart drawer. -->
     <div v-if="paper.ai_analyzed" class="ai-analysis" :class="{ expanded: aiExpanded }">
       <div class="ai-header" @click="aiExpanded = !aiExpanded">
-        <span class="ai-label">🤖 AI 分析</span>
+        <span class="ai-label">🤖 旧兼容 AI 结果（只读）</span>
         <el-button text size="small">
           {{ aiExpanded ? '收起' : '展开' }}
         </el-button>
       </div>
 
       <div class="ai-body">
-        <!-- Code -->
+        <!-- Source fact, not an AI-owned field. -->
         <div class="ai-row">
           <span v-if="paper.has_code" class="tag-has-code">
-            🔗 有开源代码
+            🔗 来源记录有代码
             <a :href="paper.code_url" target="_blank" class="code-link" @click.stop>
               {{ formatCodeUrl(paper.code_url) }}
             </a>
           </span>
-          <span v-else class="tag-no-code">🔗 摘要未提及代码</span>
+          <span v-else class="tag-no-code">🔗 来源没有代码记录</span>
         </div>
 
         <!-- Innovation -->
         <div class="ai-row">
-          <span class="ai-field">💡 创新点：</span>
+          <span class="ai-field">💡 旧创新分析：</span>
           <span class="ai-text" :class="{ clamped: !aiExpanded }">
             {{ paper.ai_innovation }}
           </span>
@@ -63,7 +63,7 @@
 
         <!-- Tech tags -->
         <div class="ai-row tech-row">
-          <span class="ai-field">🛠 技术：</span>
+          <span class="ai-field">🛠 旧技术标签：</span>
           <template v-for="tag in displayedTags" :key="tag">
             <el-tag size="small" type="info">{{ tag }}</el-tag>
           </template>
@@ -77,7 +77,7 @@
       </div>
     </div>
     <div v-else class="ai-analysis">
-      <span class="tag-no-code">尚未进行 AI 分析</span>
+      <span class="tag-no-code">统一审计分析请在购物车中运行和查看</span>
     </div>
 
     <!-- Actions -->

@@ -9,7 +9,17 @@ Before proposing or changing code:
 3. Identify the smallest current milestone and trace its full `UI -> API -> storage` path.
 4. State acceptance criteria before implementation and update `docs/ROADMAP.md` when reality changes.
 
+`docs/ROADMAP.md` is deliberately compact. Completed detail lives in `CHANGELOG.md` and Git history; read either only when the current task depends on older behavior. Do not bulk-read every document, test, or source directory as session initialization.
+
 Do not use chat memory, ignored drafts, `CLAUDE.md`, or `src/temp/` as project truth.
+
+## Context discipline
+
+- Start from the current ROADMAP slice, then use targeted `rg` searches and narrow line ranges. Avoid dumping whole files or whole-tree diffs when a symbol or route trace is enough.
+- Keep tool output bounded and exclude `src/backend/config.yaml`, `src/data/`, generated output, and unrelated history from searches.
+- Delegate only independent implementation or verification work. Give sub-agents the smallest necessary context and file scope; do not make multiple agents repeat the same repository trace or reread the full project history.
+- Keep `docs/ROADMAP.md` focused on verified baseline, active acceptance criteria, live debt, and the next handoff. Put durable release history in `CHANGELOG.md` instead of appending session transcripts.
+- Prefer an existing service/repository boundary before reading or changing route internals. If a legacy route mixes workflow, provider I/O, and SQL, extract that boundary as part of the active vertical slice rather than spreading new logic through the route.
 
 ## Product contract
 

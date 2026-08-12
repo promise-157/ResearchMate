@@ -1,15 +1,31 @@
 import axios from 'axios'
+import { AI_REQUEST_TIMEOUT_MS, MAX_CART_ANALYSIS_PAPERS } from '../constants/aiLimits'
 
 const api = axios.create({
   baseURL: '/api',
   timeout: 30000,
 })
 
+export function getApiErrorMessage(error, fallback = '请求失败') {
+  const detail = error?.response?.data?.detail
+  if (typeof detail === 'string' && detail.trim()) return detail
+  if (Array.isArray(detail)) {
+    const messages = detail.map((entry) => entry?.msg).filter(Boolean)
+    if (messages.length) return messages.join('；')
+  }
+  return error?.message || fallback
+}
+
+function cartAnalysisTimeout(paperCount) {
+  const count = Math.max(1, Math.min(Number(paperCount) || 1, MAX_CART_ANALYSIS_PAPERS))
+  return AI_REQUEST_TIMEOUT_MS * count
+}
+
 // 响应拦截：统一错误处理
 api.interceptors.response.use(
   (res) => res.data,
   (err) => {
-    const msg = err.response?.data?.detail || err.message || '请求失败'
+    const msg = getApiErrorMessage(err)
     console.error('[API Error]', msg)
     return Promise.reject(err)
   },
@@ -152,11 +168,27 @@ export function exportCart(format = 'csv') {
 }
 
 export function analyzeCartPapers(paperIds) {
-  return api.post('/cart/analyze', { paper_ids: paperIds })
+  return api.post(
+    '/cart/analyze',
+    { paper_ids: paperIds },
+    { timeout: cartAnalysisTimeout(paperIds?.length) },
+  )
 }
 
-export function analyzeAllCart() {
-  return api.post('/cart/analyze/all')
+export function analyzeAllCart(paperCount = MAX_CART_ANALYSIS_PAPERS) {
+  return api.post('/cart/analyze/all', undefined, { timeout: cartAnalysisTimeout(paperCount) })
+}
+
+export function fetchWorkspaceReviews() {
+  return api.get('/workspace/reviews')
+}
+
+export function createWorkspaceReview(paperIds) {
+  return api.post(
+    '/workspace/reviews',
+    { paper_ids: paperIds },
+    { timeout: AI_REQUEST_TIMEOUT_MS },
+  )
 }
 
 // ---- 设置 ----
@@ -170,6 +202,23 @@ export function updateSettings(data) {
 
 export function testAIConnection() {
   return api.post('/settings/ai/test', {}, { timeout: 35000 })
+}
+
+// ---- Audited paper chat ----
+export function fetchChatSessions() {
+  return api.get('/chat/sessions')
+}
+
+export function createChatSession(title = '新对话') {
+  return api.post('/chat/sessions', { title })
+}
+
+export function fetchChatSession(id) {
+  return api.get(`/chat/sessions/${id}`)
+}
+
+export function createChatTurn(id, data) {
+  return api.post(`/chat/sessions/${id}/turns`, data, { timeout: AI_REQUEST_TIMEOUT_MS })
 }
 
 // ---- 统计 ----
@@ -206,10 +255,6 @@ export function deleteWorkspace(id) {
 export function clearWorkspace() {
   return api.post('/workspaces/current/clear')
 }
-export function triggerWorkspaceReview(customPrompt) {
-  return api.post('/workspace/review', { prompt: customPrompt || '' })
-}
-
 export function getExportUrl() {
   return '/api/workspace/export'
 }

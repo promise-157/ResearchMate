@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from api.routes import cart, chat, crawl, discoveries, docs, items, journals, keywords, papers, settings, stats, url_imports, workspaces
+from api.routes import cart, chat, crawl, discoveries, docs, items, journals, keywords, papers, settings, stats, url_imports, workspace_reviews, workspaces
 from config import get
 from storage.database import init_db
 
@@ -41,6 +41,7 @@ app.include_router(settings.router, prefix="/api", tags=["settings"])
 app.include_router(stats.router, prefix="/api", tags=["stats"])
 app.include_router(docs.router, prefix="/api", tags=["docs"])
 app.include_router(workspaces.router, prefix="/api", tags=["workspaces"])
+app.include_router(workspace_reviews.router, prefix="/api", tags=["workspace-reviews"])
 app.include_router(keywords.router, prefix="/api", tags=["keywords"])
 app.include_router(chat.router, prefix="/api", tags=["chat"])
 app.include_router(items.router, prefix="/api", tags=["items"])
@@ -57,6 +58,8 @@ def on_startup():
     from processors.registry import init_registry as init_processors
     init_crawlers()
     init_processors()
+    from storage.workspace import recover_interrupted_runs
+    recover_interrupted_runs()
 
 
 @app.get("/api/health")

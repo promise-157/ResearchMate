@@ -4,7 +4,21 @@
     <div class="chat-header">
       <span class="chat-title">🤖 AI 助手</span>
       <div class="chat-header-right">
-        <span v-if="contextData.paper_count" class="chat-scope">{{ contextData.paper_count }} 篇可用</span>
+        <el-select
+          v-model="sessionId"
+          placeholder="选择会话"
+          size="small"
+          style="width: 170px"
+          @change="loadSession"
+        >
+          <el-option
+            v-for="session in sessions"
+            :key="session.id"
+            :label="`${session.title} (${session.turn_count || 0})`"
+            :value="session.id"
+          />
+        </el-select>
+        <el-button size="small" text @click="startNewSession">新对话</el-button>
         <el-badge :value="attachedPapers.length" :hidden="attachedPapers.length === 0">
           <el-button size="small" text @click="showAttach = true">📎 附件</el-button>
         </el-badge>
@@ -29,10 +43,12 @@
     <!-- Messages -->
     <div ref="msgList" class="chat-messages">
       <div v-if="messages.length === 0" class="chat-empty">
-        选择模板、附加论文或直接输入指令与 AI 对话
+        选择历史会话，或附加论文后发送第一条消息。对话会保存在当前工作区。
       </div>
       <div v-for="(m, i) in messages" :key="i" class="chat-msg" :class="m.role">
         <div class="msg-content" v-text="m.content"></div>
+        <div v-if="m.paperIds?.length" class="msg-audit">本轮附加论文 ID：{{ m.paperIds.join(', ') }}</div>
+        <div v-if="m.audit" class="msg-audit">{{ m.audit }}</div>
         <div class="msg-time">{{ m.time }}</div>
       </div>
       <div v-if="sending" class="chat-msg ai">
@@ -72,19 +88,31 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick, watch } from 'vue'
-import axios from 'axios'
+import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
+import { ElMessage } from 'element-plus'
+import {
+  createChatSession, createChatTurn, fetchChatSession, fetchChatSessions, fetchPapers,
+} from '@/api'
+import { useWorkspaceStore } from '@/stores/workspace'
+import { MAX_CHAT_ATTACHED_PAPERS } from '@/constants/aiLimits'
 
 const props = defineProps({
   presets: { type: Array, default: () => [] },
   contextData: { type: Object, default: () => ({}) },
 })
 
-const messages = ref([])
 const input = ref('')
 const selectedPreset = ref()
 const sending = ref(false)
 const msgList = ref(null)
+const sessions = ref([])
+const sessionId = ref(null)
+const turns = ref([])
+const workspaceStore = useWorkspaceStore()
+let requestGeneration = 0
+let latestSessionRequest = 0
+let latestPapersRequest = 0
+let latestSendRequest = 0
 
 // Attachments
 const showAttach = ref(false)
@@ -92,15 +120,131 @@ const attachedPapers = ref([])
 const attachSearch = ref('')
 const allPapers = ref([])
 
-// Load papers for attachment selector
-watch(() => props.contextData.paper_count, async (count) => {
-  if (count > 0) {
-    try {
-      const resp = await axios.get('/api/papers', { params: { page_size: 100 } })
-      allPapers.value = resp.data?.items || resp.data?.data?.items || []
-    } catch { /* ignore */ }
+function invalidateWorkspaceData() {
+  requestGeneration += 1
+  latestSessionRequest += 1
+  latestPapersRequest += 1
+  latestSendRequest += 1
+  sessionId.value = null
+  sessions.value = []
+  turns.value = []
+  attachedPapers.value = []
+  allPapers.value = []
+  sending.value = false
+}
+
+async function loadAttachPapers(generation = requestGeneration) {
+  const requestId = ++latestPapersRequest
+  if (props.contextData.paper_count <= 0) {
+    if (generation === requestGeneration && requestId === latestPapersRequest) {
+      allPapers.value = []
+    }
+    return
   }
-}, { immediate: true })
+  try {
+    const resp = await fetchPapers({ page_size: 100 })
+    if (generation !== requestGeneration || requestId !== latestPapersRequest) return
+    allPapers.value = resp?.items || resp?.data?.items || []
+  } catch {
+    if (generation === requestGeneration && requestId === latestPapersRequest) {
+      allPapers.value = []
+    }
+  }
+}
+
+async function reloadWorkspaceData() {
+  const generation = requestGeneration
+  await Promise.all([loadAttachPapers(generation), loadSessions(generation)])
+}
+
+const unregisterWorkspaceConsumer = workspaceStore.registerConsumer('paper-chat', {
+  invalidate: invalidateWorkspaceData,
+  reload: reloadWorkspaceData,
+})
+
+watch(() => props.contextData.paper_count, () => loadAttachPapers(), { flush: 'post' })
+onMounted(reloadWorkspaceData)
+onUnmounted(unregisterWorkspaceConsumer)
+
+const messages = computed(() => turns.value.flatMap((turn) => {
+  const result = [{
+    role: 'user', content: turn.user_message, time: turn.created_at || '',
+    paperIds: turn.paper_ids || [],
+  }]
+  if (turn.status === 'succeeded') {
+    const usage = turn.input_tokens != null || turn.output_tokens != null
+      ? ` · ${turn.input_tokens ?? '?'}↑/${turn.output_tokens ?? '?'}↓ token`
+      : ''
+    result.push({
+      role: 'ai', content: turn.assistant_message, time: turn.completed_at || '',
+      audit: `${turn.provider || ''} · ${turn.provider_model || turn.model || ''}${usage}`,
+    })
+  } else if (turn.status === 'failed') {
+    result.push({
+      role: 'ai error', content: `失败：${turn.error_message}`, time: turn.completed_at || '',
+      audit: `${turn.provider || ''} · ${turn.model || ''}`,
+    })
+  }
+  return result
+}))
+
+async function loadSessions(generation = requestGeneration) {
+  const requestId = ++latestSessionRequest
+  try {
+    const loadedSessions = await fetchChatSessions()
+    if (generation !== requestGeneration || requestId !== latestSessionRequest) return
+    sessions.value = loadedSessions
+    if (sessions.value.length > 0) {
+      sessionId.value = sessions.value[0].id
+      await loadSession(sessionId.value, generation)
+    } else {
+      sessionId.value = null
+      turns.value = []
+    }
+  } catch {
+    if (generation === requestGeneration && requestId === latestSessionRequest) {
+      sessions.value = []
+      sessionId.value = null
+      turns.value = []
+      ElMessage.error('聊天会话加载失败')
+    }
+  }
+}
+
+async function loadSession(id, generation = requestGeneration) {
+  if (!id) {
+    turns.value = []
+    return
+  }
+  const requestId = ++latestSessionRequest
+  try {
+    const session = await fetchChatSession(id)
+    if (generation !== requestGeneration || requestId !== latestSessionRequest) return
+    turns.value = session.turns || []
+    await scrollToBottom()
+  } catch {
+    if (generation === requestGeneration && requestId === latestSessionRequest) {
+      turns.value = []
+      ElMessage.error('聊天记录加载失败')
+    }
+  }
+}
+
+async function startNewSession() {
+  const generation = requestGeneration
+  const requestId = ++latestSessionRequest
+  try {
+    const session = await createChatSession()
+    if (generation !== requestGeneration || requestId !== latestSessionRequest) return
+    sessions.value.unshift({ ...session, turn_count: 0 })
+    sessionId.value = session.id
+    turns.value = []
+  } catch {
+    if (generation === requestGeneration && requestId === latestSessionRequest) {
+      ElMessage.error('新建聊天会话失败')
+    }
+  }
+}
 
 const filteredAttachPapers = computed(() => {
   if (!attachSearch.value) return allPapers.value
@@ -111,6 +255,9 @@ const filteredAttachPapers = computed(() => {
 function isAttached(id) { return attachedPapers.value.some(p => p.id === id) }
 function toggleAttach(p) {
   if (isAttached(p.id)) attachedPapers.value = attachedPapers.value.filter(x => x.id !== p.id)
+  else if (attachedPapers.value.length >= MAX_CHAT_ATTACHED_PAPERS) {
+    ElMessage.warning(`单轮最多附加 ${MAX_CHAT_ATTACHED_PAPERS} 篇论文`)
+  }
   else attachedPapers.value.push(p)
 }
 function detach(id) { attachedPapers.value = attachedPapers.value.filter(p => p.id !== id) }
@@ -125,35 +272,38 @@ async function send() {
   const text = input.value.trim()
   if (!text || sending.value) return
 
-  const now = new Date().toLocaleTimeString()
-  messages.value.push({ role: 'user', content: text, time: now })
   input.value = ''
   sending.value = true
 
-  await nextTick()
-  if (msgList.value) msgList.value.scrollTop = msgList.value.scrollHeight
-
+  const generation = requestGeneration
+  const sendRequest = ++latestSendRequest
   try {
-    const resp = await axios.post('/api/chat', {
+    if (!sessionId.value) await startNewSession()
+    if (!sessionId.value) throw new Error('无法创建聊天会话')
+    const turn = await createChatTurn(sessionId.value, {
       message: text,
       paper_ids: attachedPapers.value.map(p => p.id),
     })
-    messages.value.push({
-      role: 'ai',
-      content: resp.data.reply || resp.data.error || '无响应',
-      time: new Date().toLocaleTimeString(),
-    })
+    if (generation !== requestGeneration) return
+    turns.value.push(turn)
+    await loadSessions(generation)
+    if (turn.status === 'failed') ElMessage.error(turn.error_message || 'AI 对话失败')
   } catch (e) {
-    messages.value.push({
-      role: 'ai',
-      content: '错误: ' + (e.response?.data?.detail || e.message),
-      time: new Date().toLocaleTimeString(),
-    })
+    if (generation === requestGeneration) {
+      ElMessage.error(e.response?.data?.detail || e.message || 'AI 对话失败')
+    }
   } finally {
-    sending.value = false
-    await nextTick()
-    if (msgList.value) msgList.value.scrollTop = msgList.value.scrollHeight
+    if (generation === requestGeneration && sendRequest === latestSendRequest) {
+      sending.value = false
+      await nextTick()
+      if (msgList.value) msgList.value.scrollTop = msgList.value.scrollHeight
+    }
   }
+}
+
+async function scrollToBottom() {
+  await nextTick()
+  if (msgList.value) msgList.value.scrollTop = msgList.value.scrollHeight
 }
 </script>
 
@@ -188,6 +338,7 @@ async function send() {
 .chat-msg { max-width: 85%; }
 .chat-msg.user { align-self: flex-end; }
 .chat-msg.ai { align-self: flex-start; }
+.chat-msg.ai.error .msg-content { background: var(--color-danger-light-9); }
 .msg-content {
   padding: 8px 12px; border-radius: var(--radius-md);
   font-size: var(--font-size-sm); line-height: 1.6; white-space: pre-wrap;
@@ -196,6 +347,7 @@ async function send() {
 .chat-msg.ai .msg-content { background: var(--color-bg); color: var(--color-text-primary); }
 .msg-content.typing { color: var(--color-text-disabled); }
 .msg-time { font-size: 10px; color: var(--color-text-disabled); margin-top: 2px; padding: 0 4px; }
+.msg-audit { font-size: 10px; color: var(--color-text-secondary); margin-top: 2px; padding: 0 4px; }
 
 .chat-input-row {
   display: flex; gap: var(--space-xs); padding: 8px 12px;

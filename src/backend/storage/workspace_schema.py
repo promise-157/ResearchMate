@@ -2,7 +2,7 @@
 import sqlite3
 
 
-MATERIAL_SCHEMA_VERSION = 8
+MATERIAL_SCHEMA_VERSION = 10
 
 
 def _add_column_if_missing(
@@ -172,6 +172,61 @@ def ensure_material_schema(conn: sqlite3.Connection) -> None:
             CHECK(status IN ('pending', 'accepted', 'rejected'))
         );
 
+        CREATE TABLE IF NOT EXISTS chat_sessions (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            title           TEXT NOT NULL DEFAULT '新对话',
+            created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at      TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS chat_turns (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            session_id        INTEGER NOT NULL REFERENCES chat_sessions(id) ON DELETE CASCADE,
+            user_message      TEXT NOT NULL,
+            assistant_message TEXT,
+            status            TEXT NOT NULL DEFAULT 'running',
+            paper_ids_json     TEXT NOT NULL DEFAULT '[]',
+            input_scope_json   TEXT NOT NULL DEFAULT '[]',
+            history_turn_ids_json TEXT NOT NULL DEFAULT '[]',
+            provider          TEXT,
+            model             TEXT,
+            provider_model    TEXT,
+            input_tokens      INTEGER,
+            output_tokens     INTEGER,
+            duration_ms       INTEGER,
+            request_id        TEXT,
+            prompt_version    TEXT NOT NULL DEFAULT 'paper-chat-v1',
+            error_message     TEXT,
+            created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+            completed_at      TEXT,
+            CHECK(status IN ('running', 'succeeded', 'failed'))
+        );
+
+        CREATE TABLE IF NOT EXISTS paper_ai_runs (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            paper_id          INTEGER REFERENCES papers(id) ON DELETE CASCADE,
+            paper_ids_json    TEXT NOT NULL DEFAULT '[]',
+            run_kind          TEXT NOT NULL,
+            status            TEXT NOT NULL DEFAULT 'running',
+            input_scope_json  TEXT NOT NULL DEFAULT '[]',
+            input_hash        TEXT NOT NULL,
+            processor         TEXT NOT NULL,
+            processor_version TEXT NOT NULL,
+            prompt_version    TEXT NOT NULL,
+            provider          TEXT,
+            model             TEXT,
+            provider_model    TEXT,
+            input_tokens      INTEGER,
+            output_tokens     INTEGER,
+            duration_ms       INTEGER,
+            request_id        TEXT,
+            result_json       TEXT,
+            error_message     TEXT,
+            created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+            completed_at      TEXT,
+            CHECK(status IN ('running', 'succeeded', 'failed'))
+        );
+
         CREATE INDEX IF NOT EXISTS idx_items_type ON items(item_type);
         CREATE INDEX IF NOT EXISTS idx_items_status ON items(status);
         CREATE INDEX IF NOT EXISTS idx_items_created ON items(created_at DESC);
@@ -181,6 +236,10 @@ def ensure_material_schema(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_relations_from ON item_relations(from_item_id);
         CREATE INDEX IF NOT EXISTS idx_relations_to ON item_relations(to_item_id);
         CREATE INDEX IF NOT EXISTS idx_templates_key ON item_template_data(template_key);
+        CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated ON chat_sessions(updated_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_chat_turns_session ON chat_turns(session_id, id);
+        CREATE INDEX IF NOT EXISTS idx_paper_ai_runs_paper ON paper_ai_runs(paper_id, id DESC);
+        CREATE INDEX IF NOT EXISTS idx_paper_ai_runs_kind ON paper_ai_runs(run_kind, id DESC);
     """)
     _allow_multiple_candidates_per_job(conn)
     conn.execute(
@@ -200,6 +259,9 @@ def ensure_material_schema(conn: sqlite3.Connection) -> None:
         ("request_id", "TEXT"),
     ):
         _add_column_if_missing(conn, "extraction_runs", column, definition)
+    _add_column_if_missing(
+        conn, "chat_turns", "prompt_version", "TEXT NOT NULL DEFAULT 'paper-chat-v1'"
+    )
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_extractions_reuse "
         "ON extraction_runs(item_id, run_kind, input_hash, status)"

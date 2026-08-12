@@ -8,8 +8,8 @@
         <span class="ws-count">({{ paperCount }} {{ unit }})</span>
       </div>
       <div class="ws-actions">
-        <el-button size="small" @click="showDialog = true">切换</el-button>
-        <el-button size="small" @click="handleNew">新建</el-button>
+        <el-button size="small" :disabled="workspaceStore.transitioning" @click="showDialog = true">切换</el-button>
+        <el-button size="small" :loading="workspaceStore.transitioning" @click="handleNew">新建</el-button>
         <el-button size="small" type="danger" plain @click="$emit('clear')">清空</el-button>
       </div>
     </div>
@@ -44,7 +44,15 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { fetchWorkspaces, createWorkspace, loadWorkspace, getExportUrl, importWorkspace } from '@/api'
+import {
+  fetchWorkspaces,
+  createWorkspace,
+  loadWorkspace,
+  getExportUrl,
+  getApiErrorMessage,
+  importWorkspace,
+} from '@/api'
+import { useWorkspaceStore } from '@/stores/workspace'
 
 defineProps({
   paperCount: { type: Number, default: 0 },
@@ -58,6 +66,7 @@ const list = ref([])
 const activePath = ref('')
 const wsName = ref('default')
 const importInput = ref(null)
+const workspaceStore = useWorkspaceStore()
 
 async function loadList() {
   try {
@@ -66,32 +75,34 @@ async function loadList() {
     list.value = data.items || []
     activePath.value = data.active_path
     wsName.value = data.active_name || 'default'
-  } catch { /* ignore */ }
+  } catch (error) {
+    ElMessage.error(getApiErrorMessage(error, '工作区列表加载失败'))
+  }
 }
 
 async function handleSwitch(ws) {
   try {
-    await loadWorkspace(ws.db_path)
+    await workspaceStore.runTransition(() => loadWorkspace(ws.db_path))
     activePath.value = ws.db_path
     wsName.value = ws.name
     showDialog.value = false
     emit('workspace-changed')
     ElMessage.success(`已切换到: ${ws.name}`)
-  } catch { ElMessage.error('切换失败') }
+  } catch (error) { ElMessage.error(getApiErrorMessage(error, '切换失败')) }
 }
 
 async function handleNew() {
   try {
     const name = prompt('工作区名称:')
     if (!name) return
-    const res = await createWorkspace(name)
+    const res = await workspaceStore.runTransition(() => createWorkspace(name))
     const data = res.data || res
     activePath.value = data.db_path
     wsName.value = data.name
     emit('workspace-changed')
     await loadList()
     ElMessage.success(`已创建: ${data.name}`)
-  } catch { ElMessage.error('创建失败') }
+  } catch (error) { ElMessage.error(getApiErrorMessage(error, '创建失败')) }
 }
 
 function handleExport() {
@@ -106,7 +117,7 @@ async function onImportFile(e) {
   const file = e.target.files?.[0]
   if (!file) return
   try {
-    const res = await importWorkspace(file)
+    const res = await workspaceStore.runTransition(() => importWorkspace(file))
     const data = res.data || res
     activePath.value = data.db_path
     wsName.value = data.name
@@ -114,7 +125,7 @@ async function onImportFile(e) {
     emit('workspace-changed')
     await loadList()
     ElMessage.success(`已导入: ${data.name}`)
-  } catch { ElMessage.error('导入失败') }
+  } catch (error) { ElMessage.error(getApiErrorMessage(error, '导入失败')) }
   e.target.value = ''
 }
 

@@ -20,6 +20,8 @@ Vue UI -> /api -> application service -> repository -> workspace SQLite
 - `item_template_data`：领域模板的 schema 版本、确定性提取值和用户确认值；确认值独立保存并覆盖展示，不覆盖提取事实。
 - `collection_jobs`：搜索、同步和候选采集任务。
 - `candidates`：采集结果的审核缓冲区；只有显式接受才关联或创建 `items`。
+- `chat_sessions` / `chat_turns`：当前工作区的持久多轮聊天；每轮分别保存用户消息、成功回复或脱敏失败、明确论文范围、历史轮次范围、提示词版本和服务商元数据。
+- `paper_ai_runs`：当前工作区的论文 AI 运行审计；`paper_analysis` 按论文分别保存，`workspace_review` 按一次明确的 2–20 篇论文范围保存。两者共享运行元数据和历史展示，但保持独立 `run_kind`，不与聊天或通用资料提取运行合并。
 - `papers` 等旧表：迁移期兼容数据；`papers.item_id` 将论文专用记录映射到通用核心，专用视图继续读取兼容字段。
 
 通用字段使用正式列；领域扩展字段使用有 schema 版本的 JSON。高频查询字段在模板稳定后提升为正式列或索引，避免无边界 EAV，也避免为每个场景复制表。
@@ -36,6 +38,12 @@ Vue UI -> /api -> application service -> repository -> workspace SQLite
 - 数据库变化通过幂等迁移完成，现有工作区可原地升级。
 - 清空工作区等破坏性动作必须明确包含通用资料和兼容数据的范围。
 - 图片资产使用数据库中的受控相对路径映射到 `src/data/assets/` 的工作区隔离目录；API 不接受客户端提供的文件路径。
+
+## 工作区一致性
+
+后端进程仍采用“一个当前工作区”的本地单用户模型，但每个请求通过 `get_active_connection()` 固定到连接建立时的数据库；切换工作区不会改变在途请求的写入目标。连接租约会阻止清空或删除仍被请求使用的工作区，清空操作同时固定数据库与资产目录。应用启动时会把遗留的 `chat_turns` 和 `paper_ai_runs` 的 `running` 状态恢复为带脱敏说明的失败，避免永久显示运行中。
+
+前端工作区 store 是切换/新建/导入的唯一协调入口。它用 generation 使购物车和聊天丢弃旧工作区响应，统一清空并重载消费者；短写操作先结束再切换，长 AI 请求可继续在后端固定连接上完成。这个模型不宣称支持多个浏览器同时各自选择不同工作区；若以后需要多客户端并发，工作区身份必须成为每个请求的显式服务端契约。
 
 ## 采集器契约
 
@@ -60,7 +68,7 @@ Vue UI -> /api -> application service -> repository -> workspace SQLite
 
 AI provider 以外部 API 为主路径。DeepSeek 已有具名 OpenAI-compatible Chat Completions 适配器和独立脱敏错误映射；结构化任务使用 JSON Output 并继续执行本地 schema 校验。通用资料成功运行保存服务商返回模型、输入/输出 token、耗时和可用请求标识。Key 可来自环境变量或设置页：默认安全模式只保留在进程内；用户明确选择便利模式后才允许明文写入已被 Git 忽略的 `src/backend/config.yaml`，文件权限收紧为 `0600`，界面必须显示路径与风险，切回安全模式或清除时立即删除磁盘副本。环境变量优先且不能由网页删除。SQLite、日志、运行记录和错误响应不得包含 Key、完整输入正文或未经脱敏的模型响应。设置页连接测试只能由用户明确点击，并在发送固定最小请求前提示可能费用；页面加载不得自动探测。Ollama 仅连接用户已经运行的实例，不属于默认依赖，也不得由应用自动下载模型。
 
-论文分析、工作区综述和聊天目前仍保留兼容 route/storage 语义，但选择 DeepSeek/兼容接口时已复用同一安全 HTTP 适配器；它们尚未拥有与通用资料相同的运行审计。现状路径和 M11 迁移边界见 [AI_PATHS.md](AI_PATHS.md)。
+M11 已完成三个独立纵向切片。论文聊天使用工作区级 `chat_sessions/chat_turns` service/repository 边界：调用前先保存运行轮次，只读取本轮明确附加的最多 12 篇论文，每篇摘要限制 1,200 字符；上下文只取最近最多 10 个成功轮次且合计不超过 12,000 字符。购物车论文分析使用 `paper_ai_runs/run_kind=paper_analysis`：一次只接受当前工作区购物车中的 1–20 篇论文，逐篇保存最多 300 字符标题和 3,000 字符摘要的运行。工作区综述使用 `paper_ai_runs/run_kind=workspace_review`：用户先从当前工作区明确选择 2–20 篇，确认精确 ID、标题每篇 300 字符和摘要每篇 2,000 字符后，一次保存一条多论文运行。两种论文运行成功均保存结构化结果和返回模型、token、耗时、请求标识，失败均保存脱敏错误；共享前端运行历史组件。论文读取由 repository 承担，route 只做 HTTP 映射，外部调用留在 processor。新运行不更新 `papers` 的任何字段；旧 `papers.ai_*` 与 `workspace_reviews` 只作兼容只读展示。现状路径见 [AI_PATHS.md](AI_PATHS.md)。
 
 真实服务商调用和真实来源访问属于显式、受控的环境验收：使用无敏感 fixture、限制请求次数和输入/输出、提前说明可能费用，并把发现的响应形状与错误转成离线回归 fixture；真实调用不进入普通测试或 CI。
 
