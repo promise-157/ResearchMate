@@ -2,7 +2,7 @@
 import sqlite3
 
 
-MATERIAL_SCHEMA_VERSION = 10
+MATERIAL_SCHEMA_VERSION = 12
 
 
 def _add_column_if_missing(
@@ -83,6 +83,8 @@ def ensure_material_schema(conn: sqlite3.Connection) -> None:
             mime_type       TEXT,
             content_hash    TEXT NOT NULL,
             size_bytes      INTEGER NOT NULL,
+            image_width     INTEGER,
+            image_height    INTEGER,
             created_at      TEXT NOT NULL DEFAULT (datetime('now'))
         );
 
@@ -140,6 +142,27 @@ def ensure_material_schema(conn: sqlite3.Connection) -> None:
             extracted_at     TEXT,
             confirmed_at     TEXT,
             updated_at       TEXT NOT NULL DEFAULT (datetime('now'))
+        );
+
+        CREATE TABLE IF NOT EXISTS action_projects (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            title           TEXT NOT NULL,
+            objective       TEXT NOT NULL DEFAULT '',
+            notes           TEXT NOT NULL DEFAULT '',
+            next_action     TEXT NOT NULL DEFAULT '',
+            status          TEXT NOT NULL DEFAULT 'active',
+            created_at      TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
+            CHECK(status IN ('active', 'completed', 'archived'))
+        );
+
+        CREATE TABLE IF NOT EXISTS action_project_items (
+            project_id      INTEGER NOT NULL REFERENCES action_projects(id) ON DELETE CASCADE,
+            item_id         INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+            position        INTEGER NOT NULL,
+            added_at        TEXT NOT NULL DEFAULT (datetime('now')),
+            PRIMARY KEY(project_id, item_id),
+            UNIQUE(project_id, position)
         );
 
         CREATE TABLE IF NOT EXISTS collection_jobs (
@@ -236,6 +259,8 @@ def ensure_material_schema(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_relations_from ON item_relations(from_item_id);
         CREATE INDEX IF NOT EXISTS idx_relations_to ON item_relations(to_item_id);
         CREATE INDEX IF NOT EXISTS idx_templates_key ON item_template_data(template_key);
+        CREATE INDEX IF NOT EXISTS idx_action_projects_status ON action_projects(status, updated_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_action_project_items_item ON action_project_items(item_id);
         CREATE INDEX IF NOT EXISTS idx_chat_sessions_updated ON chat_sessions(updated_at DESC);
         CREATE INDEX IF NOT EXISTS idx_chat_turns_session ON chat_turns(session_id, id);
         CREATE INDEX IF NOT EXISTS idx_paper_ai_runs_paper ON paper_ai_runs(paper_id, id DESC);
@@ -251,6 +276,8 @@ def ensure_material_schema(conn: sqlite3.Connection) -> None:
     _add_column_if_missing(
         conn, "extraction_runs", "input_item_ids_json", "TEXT NOT NULL DEFAULT '[]'"
     )
+    _add_column_if_missing(conn, "assets", "image_width", "INTEGER")
+    _add_column_if_missing(conn, "assets", "image_height", "INTEGER")
     for column, definition in (
         ("provider_model", "TEXT"),
         ("input_tokens", "INTEGER"),

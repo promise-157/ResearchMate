@@ -126,6 +126,22 @@ class WorkspaceStabilityTests(unittest.IsolatedAsyncioTestCase):
             beta_assets = assets.workspace_asset_dir(self.beta)
             (alpha_assets / "alpha.txt").write_text("alpha", encoding="utf-8")
             (beta_assets / "beta.txt").write_text("beta", encoding="utf-8")
+            for db_path, label in ((self.alpha, "alpha"), (self.beta, "beta")):
+                conn = sqlite3.connect(db_path)
+                item_id = conn.execute(
+                    """INSERT INTO items(title, content_text, content_hash)
+                       VALUES (?, ?, ?)""",
+                    (label, label, f"{label}-hash"),
+                ).lastrowid
+                conn.execute(
+                    """INSERT INTO assets
+                       (item_id, asset_kind, original_name, storage_path, mime_type,
+                        content_hash, size_bytes)
+                       VALUES (?, 'image', ?, ?, 'image/png', ?, 1)""",
+                    (item_id, f"{label}.png", f"assets/{label}.png", f"{label}-asset"),
+                )
+                conn.commit()
+                conn.close()
 
             reached_delete = threading.Event()
             release_delete = threading.Event()
@@ -160,11 +176,53 @@ class WorkspaceStabilityTests(unittest.IsolatedAsyncioTestCase):
             self.assertEqual(errors, [])
             self.assertFalse(alpha_assets.exists())
             self.assertTrue((beta_assets / "beta.txt").is_file())
+            alpha_conn = sqlite3.connect(self.alpha)
+            beta_conn = sqlite3.connect(self.beta)
+            self.assertEqual(alpha_conn.execute("SELECT COUNT(*) FROM items").fetchone()[0], 0)
+            self.assertEqual(alpha_conn.execute("SELECT COUNT(*) FROM assets").fetchone()[0], 0)
+            self.assertEqual(beta_conn.execute("SELECT COUNT(*) FROM items").fetchone()[0], 1)
+            self.assertEqual(beta_conn.execute("SELECT COUNT(*) FROM assets").fetchone()[0], 1)
+            alpha_conn.close()
+            beta_conn.close()
+
+    def test_delete_removes_only_target_database_and_assets(self):
+        asset_root = self.root / "assets"
+        workspace.switch_workspace(self.beta)
+        with patch.object(assets, "ASSET_ROOT", asset_root):
+            alpha_assets = assets.workspace_asset_dir(self.alpha)
+            beta_assets = assets.workspace_asset_dir(self.beta)
+            (alpha_assets / "alpha.png").write_bytes(b"alpha")
+            (beta_assets / "beta.png").write_bytes(b"beta")
+
+            workspace.delete_workspace_file(self.alpha)
+
+            self.assertFalse(Path(self.alpha).exists())
+            self.assertFalse(alpha_assets.exists())
+            self.assertTrue(Path(self.beta).is_file())
+            self.assertEqual((beta_assets / "beta.png").read_bytes(), b"beta")
 
     def test_startup_recovery_and_generic_run_kind_query(self):
         paper_id = self.insert_cart_paper(self.alpha, "recovery-paper")
         conn = sqlite3.connect(self.alpha)
         conn.row_factory = sqlite3.Row
+        item_id = conn.execute(
+            """INSERT INTO items(title, content_text, content_hash)
+               VALUES ('interrupted item', 'fixture', 'interrupted-item')"""
+        ).lastrowid
+        running_extraction_id = conn.execute(
+            """INSERT INTO extraction_runs
+               (item_id, processor, processor_version, run_kind, status, input_hash)
+               VALUES (?, 'material_ai', '2', 'classify', 'running', 'running-input')""",
+            (item_id,),
+        ).lastrowid
+        terminal_extraction_id = conn.execute(
+            """INSERT INTO extraction_runs
+               (item_id, processor, processor_version, run_kind, status, input_hash,
+                result_json)
+               VALUES (?, 'local_tesseract', '1', 'ocr', 'succeeded',
+                       'terminal-input', '{"text":"kept"}')""",
+            (item_id,),
+        ).lastrowid
         session_id = conn.execute(
             "INSERT INTO chat_sessions(title) VALUES ('running')"
         ).lastrowid
@@ -185,9 +243,33 @@ class WorkspaceStabilityTests(unittest.IsolatedAsyncioTestCase):
             provider="deepseek",
             model="fixture-model",
         )
+        running_job_id = conn.execute(
+            """INSERT INTO collection_jobs(collector, query_json, status)
+               VALUES ('arxiv_api', '{"query":"fixture"}', 'running')"""
+        ).lastrowid
+        terminal_job_id = conn.execute(
+            """INSERT INTO collection_jobs(collector, query_json, status, candidate_count)
+               VALUES ('arxiv_api', '{"query":"done"}', 'succeeded', 1)"""
+        ).lastrowid
+        conn.commit()
         conn.close()
 
-        self.assertEqual(workspace.recover_interrupted_runs(self.root), 2)
+        beta_conn = sqlite3.connect(self.beta)
+        beta_item_id = beta_conn.execute(
+            """INSERT INTO items(title, content_text, content_hash)
+               VALUES ('beta interrupted item', 'fixture', 'beta-interrupted-item')"""
+        ).lastrowid
+        beta_extraction_id = beta_conn.execute(
+            """INSERT INTO extraction_runs
+               (item_id, processor, processor_version, run_kind, status, input_hash)
+               VALUES (?, 'material_ai', '2', 'compare', 'running', 'beta-running-input')""",
+            (beta_item_id,),
+        ).lastrowid
+        beta_conn.commit()
+        beta_conn.close()
+
+        self.assertEqual(workspace.recover_interrupted_runs(self.root), 5)
+        self.assertEqual(workspace.recover_interrupted_runs(self.root), 0)
 
         conn = sqlite3.connect(self.alpha)
         conn.row_factory = sqlite3.Row
@@ -200,7 +282,40 @@ class WorkspaceStabilityTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([run["id"] for run in runs], [review_run["id"]])
         self.assertEqual(runs[0]["paper_ids"], [paper_id])
         self.assertEqual(runs[0]["status"], "failed")
+        running_job = conn.execute(
+            "SELECT status, candidate_count, error_message FROM collection_jobs WHERE id = ?",
+            (running_job_id,),
+        ).fetchone()
+        terminal_job = conn.execute(
+            "SELECT status, candidate_count, error_message FROM collection_jobs WHERE id = ?",
+            (terminal_job_id,),
+        ).fetchone()
+        self.assertEqual((running_job["status"], running_job["candidate_count"]), ("failed", 0))
+        self.assertIn("中断", running_job["error_message"])
+        self.assertEqual(tuple(terminal_job), ("succeeded", 1, None))
+        interrupted_extraction = conn.execute(
+            "SELECT status, result_json, error_message FROM extraction_runs WHERE id = ?",
+            (running_extraction_id,),
+        ).fetchone()
+        terminal_extraction = conn.execute(
+            "SELECT status, result_json, error_message FROM extraction_runs WHERE id = ?",
+            (terminal_extraction_id,),
+        ).fetchone()
+        self.assertEqual(interrupted_extraction["status"], "failed")
+        self.assertIsNone(interrupted_extraction["result_json"])
+        self.assertIn("中断", interrupted_extraction["error_message"])
+        self.assertEqual(tuple(terminal_extraction), ("succeeded", '{"text":"kept"}', None))
         conn.close()
+
+        beta_conn = sqlite3.connect(self.beta)
+        beta_conn.row_factory = sqlite3.Row
+        beta_extraction = beta_conn.execute(
+            "SELECT status, error_message FROM extraction_runs WHERE id = ?",
+            (beta_extraction_id,),
+        ).fetchone()
+        beta_conn.close()
+        self.assertEqual(beta_extraction["status"], "failed")
+        self.assertIn("中断", beta_extraction["error_message"])
 
 
 if __name__ == "__main__":

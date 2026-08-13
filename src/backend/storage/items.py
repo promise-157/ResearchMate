@@ -277,6 +277,20 @@ def complete_extraction_run(
     return get_extraction_run(conn, run_id)
 
 
+def fail_running_extraction_runs(
+    conn: sqlite3.Connection,
+    error_message: str = "上次应用退出时资料处理被中断，请重新执行",
+) -> int:
+    cursor = conn.execute(
+        """UPDATE extraction_runs
+           SET status = 'failed', error_message = ?
+           WHERE status = 'running'""",
+        (error_message,),
+    )
+    conn.commit()
+    return cursor.rowcount
+
+
 def list_extraction_runs(
     conn: sqlite3.Connection, item_id: int
 ) -> list[dict[str, Any]]:

@@ -23,6 +23,7 @@ from processors.ai_provider import AIProviderError, AIResponse
 from processors.paper_ai import validate_result
 from services import paper_analysis
 from storage.workspace import _init_workspace_db, _migrate_workspace_db, clear_workspace
+from storage.workspace_schema import MATERIAL_SCHEMA_VERSION
 
 
 def successful_response(
@@ -655,7 +656,7 @@ class PaperAnalysisMigrationTests(unittest.TestCase):
                 conn.execute(
                     "SELECT value FROM schema_meta WHERE key = 'material_schema_version'"
                 ).fetchone()[0],
-                "10",
+                str(MATERIAL_SCHEMA_VERSION),
             )
             paper = conn.execute(
                 """SELECT title, abstract, has_code, code_url, ai_innovation,

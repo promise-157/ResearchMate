@@ -1,5 +1,6 @@
 """Controlled collector for one user-specified public HTML page."""
 import asyncio
+import codecs
 import ipaddress
 import re
 import socket
@@ -145,7 +146,7 @@ class SinglePublicURLCollector:
 
     async def collect(self, url: str) -> CollectedPage:
         current = await validate_public_url(url, resolver=self.resolver)
-        checked_origins: set[str] = set()
+        robots_by_origin: dict[str, RobotFileParser | None] = {}
         async with httpx.AsyncClient(
             timeout=REQUEST_TIMEOUT_SECONDS,
             follow_redirects=False,
@@ -156,9 +157,9 @@ class SinglePublicURLCollector:
             for redirect_count in range(MAX_REDIRECTS + 1):
                 parsed = urlparse(current)
                 origin = f"{parsed.scheme}://{parsed.netloc}"
-                if origin not in checked_origins:
-                    await self._check_robots(client, current)
-                    checked_origins.add(origin)
+                if origin not in robots_by_origin:
+                    robots_by_origin[origin] = await self._load_robots(client, current)
+                self._enforce_robots(robots_by_origin[origin], current)
                 status, headers, body, peer = await self._read_response(
                     client, current, MAX_HTML_BYTES
                 )
@@ -178,8 +179,8 @@ class SinglePublicURLCollector:
                 content_type = headers.get("content-type", "").split(";", 1)[0].strip().lower()
                 if content_type not in {"text/html", "application/xhtml+xml"}:
                     raise RuntimeError("仅支持公开 HTML 页面，不下载附件或其他内容")
-                encoding = self._charset(headers.get("content-type", ""))
-                title, text = extract_html(body.decode(encoding, errors="replace"))
+                html, encoding = self._decode_html(body, headers.get("content-type", ""))
+                title, text = extract_html(html)
                 if not text:
                     raise RuntimeError("页面未提取到可用正文")
                 return CollectedPage(
@@ -190,19 +191,23 @@ class SinglePublicURLCollector:
                         "collector": self.name,
                         "http_status": status,
                         "content_type": content_type,
+                        "charset": encoding,
+                        "redirect_count": redirect_count,
                         "fetched_at": datetime.now(timezone.utc).isoformat(),
                     },
                 )
         raise RuntimeError("页面导入失败")
 
-    async def _check_robots(self, client: httpx.AsyncClient, page_url: str) -> None:
+    async def _load_robots(
+        self, client: httpx.AsyncClient, page_url: str
+    ) -> RobotFileParser | None:
         parsed = urlparse(page_url)
         robots_url = f"{parsed.scheme}://{parsed.netloc}/robots.txt"
         robots_url = await validate_public_url(robots_url, resolver=self.resolver)
         status, _, body, peer = await self._read_response(client, robots_url, MAX_ROBOTS_BYTES)
         self._validate_peer(peer)
         if status == 404:
-            return
+            return None
         if status in {401, 403}:
             raise RuntimeError("来源的 robots 策略不允许读取")
         if status < 200 or status >= 300:
@@ -210,6 +215,12 @@ class SinglePublicURLCollector:
         parser = RobotFileParser()
         parser.set_url(robots_url)
         parser.parse(body.decode("utf-8", errors="replace").splitlines())
+        return parser
+
+    @staticmethod
+    def _enforce_robots(parser: RobotFileParser | None, page_url: str) -> None:
+        if parser is None:
+            return
         if not parser.can_fetch(USER_AGENT, page_url):
             raise RuntimeError("来源的 robots 策略不允许读取该页面")
 
@@ -236,7 +247,43 @@ class SinglePublicURLCollector:
         except ValueError as exc:
             raise RuntimeError("无法验证连接目标地址") from exc
 
+    @classmethod
+    def _decode_html(cls, body: bytes, content_type: str) -> tuple[str, str]:
+        encoding = cls._header_charset(content_type)
+        if encoding is None:
+            if body.startswith(codecs.BOM_UTF8):
+                encoding = "utf-8-sig"
+            elif body.startswith((codecs.BOM_UTF16_LE, codecs.BOM_UTF16_BE)):
+                encoding = "utf-16"
+            else:
+                encoding = cls._meta_charset(body) or "utf-8"
+        try:
+            canonical = codecs.lookup(encoding).name
+        except LookupError as exc:
+            raise RuntimeError(f"页面声明了不支持的字符集：{encoding[:80]}") from exc
+        try:
+            return body.decode(encoding), canonical
+        except UnicodeDecodeError as exc:
+            raise RuntimeError(f"页面内容无法按声明字符集 {canonical} 解码") from exc
+
     @staticmethod
-    def _charset(content_type: str) -> str:
+    def _header_charset(content_type: str) -> str | None:
         match = re.search(r"charset=([^;\s]+)", content_type, re.IGNORECASE)
-        return match.group(1).strip('"\'') if match else "utf-8"
+        return match.group(1).strip('"\'') if match else None
+
+    @staticmethod
+    def _meta_charset(body: bytes) -> str | None:
+        prefix = body[:4096].decode("latin-1")
+        match = re.search(
+            r"<meta\b[^>]*\bcharset\s*=\s*[\"']?\s*([A-Za-z0-9._:-]+)",
+            prefix,
+            re.IGNORECASE,
+        )
+        if match:
+            return match.group(1)
+        match = re.search(
+            r"<meta\b[^>]*\bcontent\s*=\s*[\"'][^\"']*charset\s*=\s*([A-Za-z0-9._:-]+)",
+            prefix,
+            re.IGNORECASE,
+        )
+        return match.group(1) if match else None

@@ -155,3 +155,51 @@ test('single failure/success, 2/20-item comparison and workspace isolation persi
   await expect(page.getByRole('dialog', { name: 'AI 离线资料 1' })
     .getByText('服务商返回：deepseek-v4-pro-fixture')).toBeVisible()
 })
+
+test('interrupted material processing is visible as a recovered failure', async ({ page }) => {
+  const recoveredRun = run(
+    60,
+    'failed',
+    'classify',
+    [1],
+    null,
+    '上次应用退出时资料处理被中断，请重新执行',
+  )
+
+  await page.route('http://127.0.0.1:4173/api/**', async (route) => {
+    const request = route.request()
+    const url = new URL(request.url())
+    const path = url.pathname
+    const method = request.method()
+    const json = (value, status = 200) => route.fulfill({
+      status,
+      contentType: 'application/json',
+      body: JSON.stringify(value),
+    })
+
+    if (path === '/api/workspaces' && method === 'GET') {
+      return json({
+        items: [workspaces[0]],
+        active_path: workspaces[0].db_path,
+        active_name: workspaces[0].name,
+      })
+    }
+    if (path === '/api/candidates') return json({ candidates: [] })
+    if (path === '/api/collection-jobs') return json({ jobs: [] })
+    if (path === '/api/items' && method === 'GET') {
+      return json({ items: [items[0]], total: 1, page: 1, page_size: 20 })
+    }
+    if (path === '/api/items/1' && method === 'GET') return json(items[0])
+    if (path === '/api/items/1/analysis-runs' && method === 'GET') {
+      return json({ runs: [recoveredRun] })
+    }
+    return json({ detail: `Unhandled fixture route: ${method} ${path}` }, 500)
+  })
+
+  await page.goto('/materials')
+  await page.getByRole('heading', { name: 'AI 离线资料 1', level: 3, exact: true }).click()
+  const detail = page.getByRole('dialog', { name: 'AI 离线资料 1' })
+  await expect(detail.getByText('失败', { exact: true })).toBeVisible()
+  await expect(detail.getByText('上次应用退出时资料处理被中断，请重新执行')).toBeVisible()
+  await expect(detail.getByText('运行中', { exact: true })).toHaveCount(0)
+})

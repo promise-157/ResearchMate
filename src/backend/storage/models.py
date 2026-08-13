@@ -155,6 +155,29 @@ class MaterialComparisonRequest(BaseModel):
     input_fields: List[MaterialInputField] = Field(min_length=1, max_length=6)
 
 
+ActionProjectStatus = Literal["active", "completed", "archived"]
+
+
+class ActionProjectCreate(BaseModel):
+    title: str = Field(min_length=1, max_length=200)
+    objective: str = Field("", max_length=2_000)
+    notes: str = Field("", max_length=12_000)
+    next_action: str = Field("", max_length=1_000)
+    item_ids: List[int] = Field(min_length=1, max_length=20)
+
+
+class ActionProjectUpdate(BaseModel):
+    title: Optional[str] = Field(None, min_length=1, max_length=200)
+    objective: Optional[str] = Field(None, max_length=2_000)
+    notes: Optional[str] = Field(None, max_length=12_000)
+    next_action: Optional[str] = Field(None, max_length=1_000)
+    status: Optional[ActionProjectStatus] = None
+
+
+class ActionProjectMaterialsUpdate(BaseModel):
+    item_ids: List[int] = Field(min_length=1, max_length=20)
+
+
 class PublicURLImportRequest(BaseModel):
     url: str = Field(min_length=1, max_length=2_000)
 

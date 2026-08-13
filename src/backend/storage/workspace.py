@@ -115,8 +115,10 @@ def recover_interrupted_runs(workspace_dir: Path | None = None) -> int:
             conn.row_factory = sqlite3.Row
             conn.execute("PRAGMA foreign_keys=ON")
             _migrate_workspace_db(conn)
-            from storage import chats, paper_ai_runs
+            from storage import candidates, chats, items, paper_ai_runs
+            recovered += candidates.fail_running_jobs(conn)
             recovered += chats.fail_running_turns(conn)
+            recovered += items.fail_running_extraction_runs(conn)
             recovered += paper_ai_runs.fail_running_runs(conn)
         except (OSError, sqlite3.DatabaseError, ValueError):
             # Invalid/unavailable files are handled by the workspace import boundary.
@@ -167,6 +169,8 @@ def clear_workspace():
             raise WorkspaceBusyError("工作区仍有请求正在运行，请等待完成后再清空")
         conn = get_active_connection()
     try:
+        conn.execute("DELETE FROM action_project_items")
+        conn.execute("DELETE FROM action_projects")
         conn.execute("DELETE FROM item_relations")
         conn.execute("DELETE FROM item_template_data")
         conn.execute("DELETE FROM accepted_extractions")

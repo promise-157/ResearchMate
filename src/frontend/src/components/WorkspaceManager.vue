@@ -27,13 +27,20 @@
         <el-button v-if="ws.db_path !== activePath" size="small" type="primary" plain>加载</el-button>
         <el-tag v-else size="small" type="success">当前</el-tag>
       </div>
+      <el-alert
+        type="info"
+        :closable="false"
+        show-icon
+        title="完整归档包含工作区数据库和用户导入的图片资产"
+        description="推荐导入 .zip 完整归档；旧 .db 仅在没有图片记录时兼容。归档最大 512 MB。"
+      />
       <template #footer>
         <div class="ws-dialog-footer">
           <div>
-            <el-button size="small" @click="handleExport">📤 导出</el-button>
-            <el-button size="small" @click="handleImportClick">📥 导入</el-button>
+            <el-button size="small" :loading="exporting" @click="handleExport">📤 导出完整归档</el-button>
+            <el-button size="small" @click="handleImportClick">📥 导入归档</el-button>
           </div>
-          <input ref="importInput" type="file" accept=".db" style="display:none" @change="onImportFile" />
+          <input ref="importInput" type="file" accept=".zip,.db,application/zip" style="display:none" @change="onImportFile" />
           <el-button @click="showDialog = false">关闭</el-button>
         </div>
       </template>
@@ -48,7 +55,7 @@ import {
   fetchWorkspaces,
   createWorkspace,
   loadWorkspace,
-  getExportUrl,
+  exportWorkspaceArchive,
   getApiErrorMessage,
   importWorkspace,
 } from '@/api'
@@ -66,6 +73,7 @@ const list = ref([])
 const activePath = ref('')
 const wsName = ref('default')
 const importInput = ref(null)
+const exporting = ref(false)
 const workspaceStore = useWorkspaceStore()
 
 async function loadList() {
@@ -105,8 +113,31 @@ async function handleNew() {
   } catch (error) { ElMessage.error(getApiErrorMessage(error, '创建失败')) }
 }
 
-function handleExport() {
-  window.open(getExportUrl(), '_blank')
+async function handleExport() {
+  exporting.value = true
+  try {
+    const blob = await exportWorkspaceArchive()
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = `${wsName.value || 'workspace'}.researchmate.zip`
+    document.body.appendChild(anchor)
+    anchor.click()
+    anchor.remove()
+    URL.revokeObjectURL(url)
+    ElMessage.success('完整工作区归档已生成')
+  } catch (error) {
+    let message = getApiErrorMessage(error, '完整工作区归档导出失败')
+    if (error.response?.data instanceof Blob) {
+      try {
+        const payload = JSON.parse(await error.response.data.text())
+        if (typeof payload.detail === 'string' && payload.detail.trim()) message = payload.detail
+      } catch { /* keep the safe fallback */ }
+    }
+    ElMessage.error(message)
+  } finally {
+    exporting.value = false
+  }
 }
 
 function handleImportClick() {

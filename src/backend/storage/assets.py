@@ -35,11 +35,12 @@ def create_asset(conn: sqlite3.Connection, data: dict[str, Any]) -> dict[str, An
     cursor = conn.execute(
         """INSERT INTO assets
            (item_id, asset_kind, original_name, storage_path, mime_type,
-            content_hash, size_bytes) VALUES (?, ?, ?, ?, ?, ?, ?)""",
+            content_hash, size_bytes, image_width, image_height)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             data["item_id"], data["asset_kind"], data["original_name"],
             data["storage_path"], data["mime_type"], data["content_hash"],
-            data["size_bytes"],
+            data["size_bytes"], data.get("image_width"), data.get("image_height"),
         ),
     )
     return get_asset(conn, cursor.lastrowid)

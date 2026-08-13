@@ -78,6 +78,21 @@ def list_jobs(
     return [_decode_job(row) for row in rows]
 
 
+def fail_running_jobs(
+    conn: sqlite3.Connection,
+    error_message: str = "上次应用退出时采集任务被中断，请重新执行",
+) -> int:
+    cursor = conn.execute(
+        """UPDATE collection_jobs
+           SET status = 'failed', candidate_count = 0, error_message = ?,
+               updated_at = datetime('now')
+           WHERE status = 'running'""",
+        (error_message,),
+    )
+    conn.commit()
+    return cursor.rowcount
+
+
 def create_candidate(conn: sqlite3.Connection, data: dict[str, Any]) -> dict[str, Any]:
     cursor = conn.execute(
         """INSERT INTO candidates

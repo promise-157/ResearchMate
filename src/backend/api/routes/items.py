@@ -8,7 +8,9 @@ from services.material_analysis import (
     analyze_material, compare_materials, list_comparison_runs, list_material_runs,
 )
 from services.materials import get_material, import_text_material, list_materials, update_material
-from services.image_materials import get_asset_file, import_image_material, run_local_ocr
+from services.image_materials import (
+    MAX_IMAGE_BYTES, get_asset_file, import_image_material, run_local_ocr,
+)
 from services.accepted_extractions import accept_extraction
 from services.template_registry import (
     confirm_item_template as confirm_template,
@@ -29,7 +31,7 @@ STATUSES = {"inbox", "active", "archived"}
 
 @router.post("/items/import-image")
 async def import_image(file: UploadFile = File(...), title: str = Form("")):
-    data = await file.read(10 * 1024 * 1024 + 1)
+    data = await file.read(MAX_IMAGE_BYTES + 1)
     try:
         item, created = import_image_material(
             filename=file.filename or "image", data=data, title=title,
@@ -43,8 +45,10 @@ async def import_image(file: UploadFile = File(...), title: str = Form("")):
 def get_asset_content(asset_id: int):
     try:
         found = get_asset_file(asset_id)
-    except (ValueError, FileNotFoundError) as exc:
+    except FileNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
     if not found:
         raise HTTPException(status_code=404, detail="资产不存在")
     asset, path = found

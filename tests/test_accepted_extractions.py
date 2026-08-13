@@ -1,9 +1,12 @@
+import io
 import sqlite3
 import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
+
+from PIL import Image
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -23,6 +26,25 @@ class FakeOCR:
         return "刷新后仍可检索的 OCR fixture 文本"
 
 
+class TextOCR:
+    def __init__(self, text):
+        self.text = text
+
+    def extract(self, image_path):
+        return self.text
+
+
+class FailingOCR:
+    def extract(self, image_path):
+        raise RuntimeError("重新处理 fixture 失败")
+
+
+def complete_image(format_name="PNG", *, color="white"):
+    output = io.BytesIO()
+    Image.new("RGB", (32, 24), color).save(output, format=format_name)
+    return output.getvalue()
+
+
 class AcceptedExtractionTests(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
@@ -31,7 +53,6 @@ class AcceptedExtractionTests(unittest.TestCase):
         _init_workspace_db(self.db_path)
         self.patches = [
             patch("services.image_materials.get_active_connection", side_effect=self.connect),
-            patch("services.image_materials.get_active_path", return_value=self.db_path),
             patch("services.image_materials._update_workspace_item_count"),
             patch("services.accepted_extractions.get_active_connection", side_effect=self.connect),
             patch("storage.assets.DATA_DIR", self.root),
@@ -53,7 +74,7 @@ class AcceptedExtractionTests(unittest.TestCase):
 
     def create_ocr_run(self):
         item, _ = import_image_material(
-            filename="fixture.png", data=b"\x89PNG\r\n\x1a\naccepted-fixture"
+            filename="fixture.png", data=complete_image("PNG")
         )
         return item, run_local_ocr(item["id"], processor=FakeOCR())
 
@@ -90,7 +111,7 @@ class AcceptedExtractionTests(unittest.TestCase):
     def test_rejects_cross_item_and_non_deterministic_runs(self):
         item, run = self.create_ocr_run()
         other, _ = import_image_material(
-            filename="other.jpg", data=b"\xff\xd8\xffother-accepted-fixture"
+            filename="other.jpg", data=complete_image("JPEG", color="blue")
         )
         with self.assertRaisesRegex(ValueError, "不属于"):
             accept_extraction(other["id"], run["id"])
@@ -137,6 +158,96 @@ class AcceptedExtractionTests(unittest.TestCase):
         conn.close()
         self.assertEqual(tuple(current), (second_run["id"], "第二版 OCR 文本"))
         self.assertEqual(history_count, 2)
+
+    def test_reprocessing_preserves_source_history_and_acceptance_until_reaccepted(self):
+        item, first_run = self.create_ocr_run()
+        accepted = accept_extraction(item["id"], first_run["id"])
+        conn = self.connect()
+        source_before = tuple(conn.execute(
+            "SELECT source_kind, content_text, content_hash FROM items WHERE id = ?",
+            (item["id"],),
+        ).fetchone())
+        asset_before = tuple(conn.execute(
+            "SELECT original_name, storage_path, content_hash, size_bytes FROM assets WHERE item_id = ?",
+            (item["id"],),
+        ).fetchone())
+        conn.close()
+
+        second_run = run_local_ocr(item["id"], processor=TextOCR("尚未接受的第二版"))
+        with self.assertRaisesRegex(RuntimeError, "重新处理 fixture 失败"):
+            run_local_ocr(item["id"], processor=FailingOCR())
+
+        conn = self.connect()
+        source_after = tuple(conn.execute(
+            "SELECT source_kind, content_text, content_hash FROM items WHERE id = ?",
+            (item["id"],),
+        ).fetchone())
+        asset_after = tuple(conn.execute(
+            "SELECT original_name, storage_path, content_hash, size_bytes FROM assets WHERE item_id = ?",
+            (item["id"],),
+        ).fetchone())
+        current = conn.execute(
+            "SELECT run_id, text_value FROM accepted_extractions WHERE item_id = ?",
+            (item["id"],),
+        ).fetchone()
+        runs = conn.execute(
+            "SELECT id, status FROM extraction_runs WHERE item_id = ? ORDER BY id",
+            (item["id"],),
+        ).fetchall()
+        conn.close()
+
+        self.assertEqual(source_after, source_before)
+        self.assertEqual(asset_after, asset_before)
+        self.assertEqual(tuple(current), (accepted["run_id"], accepted["text_value"]))
+        self.assertEqual(
+            [(run["id"], run["status"]) for run in runs],
+            [(first_run["id"], "succeeded"), (second_run["id"], "succeeded"), (runs[2]["id"], "failed")],
+        )
+
+        updated = accept_extraction(item["id"], second_run["id"])
+        self.assertEqual((updated["run_id"], updated["text_value"]), (second_run["id"], "尚未接受的第二版"))
+
+    def test_reprocessing_is_isolated_to_the_connection_workspace(self):
+        first_item, first_run = self.create_ocr_run()
+        first_accepted = accept_extraction(first_item["id"], first_run["id"])
+        first_db = self.db_path
+
+        second_db = str(self.root / "second.db")
+        _init_workspace_db(second_db)
+        self.db_path = second_db
+        second_item, _ = import_image_material(
+            filename="second.png", data=complete_image("PNG", color="blue")
+        )
+        self.assertEqual(second_item["id"], first_item["id"])
+        second_run = run_local_ocr(second_item["id"], processor=TextOCR("second workspace"))
+
+        second_conn = self.connect()
+        second_runs = second_conn.execute(
+            "SELECT id, result_json FROM extraction_runs ORDER BY id"
+        ).fetchall()
+        second_accepted_count = second_conn.execute(
+            "SELECT COUNT(*) FROM accepted_extractions"
+        ).fetchone()[0]
+        second_conn.close()
+
+        self.db_path = first_db
+        first_conn = self.connect()
+        first_runs = first_conn.execute(
+            "SELECT id, result_json FROM extraction_runs ORDER BY id"
+        ).fetchall()
+        first_current = first_conn.execute(
+            "SELECT run_id, text_value FROM accepted_extractions WHERE item_id = ?",
+            (first_item["id"],),
+        ).fetchone()
+        first_conn.close()
+
+        self.assertEqual(len(first_runs), 1)
+        self.assertIn("刷新后仍可检索", first_runs[0]["result_json"])
+        self.assertEqual(tuple(first_current), (first_accepted["run_id"], first_accepted["text_value"]))
+        self.assertEqual(len(second_runs), 1)
+        self.assertEqual(second_runs[0]["id"], second_run["id"])
+        self.assertIn("second workspace", second_runs[0]["result_json"])
+        self.assertEqual(second_accepted_count, 0)
 
 
 if __name__ == "__main__":

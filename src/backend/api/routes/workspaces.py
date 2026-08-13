@@ -1,13 +1,22 @@
 """工作区管理 API"""
 import os
-import sqlite3
+import tempfile
 from datetime import datetime
+from pathlib import Path
 from fastapi import APIRouter, HTTPException, UploadFile, File
 from fastapi.responses import FileResponse
+from starlette.background import BackgroundTask
+from services.workspace_archives import (
+    MAX_ARCHIVE_BYTES,
+    WorkspaceArchiveError,
+    create_workspace_archive,
+    import_workspace_upload,
+    remove_temporary_export,
+)
 from storage.database import get_connection as get_main_conn, dict_from_row
 from storage.workspace import (
     get_active_path, switch_workspace, create_workspace,
-    delete_workspace_file, clear_workspace, WORKSPACE_DIR,
+    delete_workspace_file, clear_workspace,
     get_active_connection,
     WorkspaceBusyError,
 )
@@ -134,85 +143,78 @@ def delete_workspace_api(workspace_id: int):
 
 @router.get("/workspace/export")
 def export_workspace():
-    """下载当前工作区 DB 文件。"""
-    db_path = get_active_path()
-    if not os.path.isfile(db_path):
-        raise HTTPException(status_code=404, detail="工作区文件不存在")
-    name = os.path.basename(db_path)
-    return FileResponse(db_path, media_type="application/octet-stream", filename=name)
+    """Download a consistent database + asset archive for the current workspace."""
+    try:
+        exported = create_workspace_archive()
+    except WorkspaceArchiveError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    return FileResponse(
+        exported.path,
+        media_type="application/zip",
+        filename=exported.filename,
+        background=BackgroundTask(remove_temporary_export, exported.path),
+    )
 
 
 @router.post("/workspace/import")
 async def import_workspace(file: UploadFile = File(...)):
-    """上传工作区 DB 文件并加载。"""
-    if not file.filename or not file.filename.endswith(".db"):
-        raise HTTPException(status_code=400, detail="请上传 .db 文件")
-
-    _ensure_dir_ws()
-    safe_name = os.path.basename(file.filename).replace(" ", "_").replace("\\", "_")
-    stem, suffix = os.path.splitext(safe_name)
-    dest = os.path.join(str(WORKSPACE_DIR), safe_name)
-    index = 1
-    while os.path.exists(dest):
-        dest = os.path.join(str(WORKSPACE_DIR), f"{stem}_{index}{suffix}")
-        index += 1
-
-    temp_dest = f"{dest}.upload"
+    """Upload a portable archive, or a legacy asset-free SQLite database."""
+    if not file.filename:
+        raise HTTPException(status_code=400, detail="请选择工作区归档文件")
+    upload_fd, upload_name = tempfile.mkstemp(
+        prefix="researchmate-upload-", suffix=".upload"
+    )
+    os.close(upload_fd)
     size = 0
     try:
-        with open(temp_dest, "wb") as output:
+        with open(upload_name, "wb") as output:
             while chunk := await file.read(1024 * 1024):
                 size += len(chunk)
-                if size > 100 * 1024 * 1024:
-                    raise HTTPException(status_code=413, detail="工作区文件不能超过 100 MB")
+                if size > MAX_ARCHIVE_BYTES:
+                    raise HTTPException(status_code=413, detail="工作区归档文件不能超过 512 MB")
                 output.write(chunk)
-        _validate_workspace_file(temp_dest)
-        os.replace(temp_dest, dest)
-    except Exception:
-        if os.path.exists(temp_dest):
-            os.remove(temp_dest)
-        raise
+        imported = import_workspace_upload(Path(upload_name), file.filename)
+    except WorkspaceArchiveError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=str(exc)) from exc
+    finally:
+        if os.path.exists(upload_name):
+            os.remove(upload_name)
 
     # 注册到主DB
-    display_name = os.path.basename(dest).removesuffix(".db")
+    previous_path = get_active_path()
     conn = get_main_conn()
-    existing = conn.execute("SELECT id FROM workspaces WHERE db_path = ?", (dest,)).fetchone()
-    if not existing:
+    try:
         conn.execute(
             "INSERT INTO workspaces (name, db_path) VALUES (?, ?)",
-            (display_name, dest),
+            (imported.name, imported.db_path),
         )
-    conn.commit()
-    conn.close()
-
-    switch_workspace(dest)
-    return {"ok": True, "name": display_name, "db_path": dest}
-
-
-def _ensure_dir_ws():
-    WORKSPACE_DIR.mkdir(parents=True, exist_ok=True)
-
-
-def _validate_workspace_file(path: str):
-    """Reject non-SQLite files and databases without the workspace schema."""
-    try:
-        with open(path, "rb") as uploaded:
-            if uploaded.read(16) != b"SQLite format 3\x00":
-                raise ValueError("not sqlite")
-        conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        conn.commit()
+        if not switch_workspace(imported.db_path):
+            raise RuntimeError("导入后的工作区无法加载")
+    except Exception as exc:
+        conn.rollback()
+        if get_active_path() == imported.db_path:
+            switch_workspace(previous_path)
         try:
-            tables = {row[0] for row in conn.execute(
-                "SELECT name FROM sqlite_master WHERE type = 'table'"
-            )}
-        finally:
-            conn.close()
-        if not {"papers", "crawl_tasks"}.issubset(tables):
-            raise ValueError("missing workspace tables")
-    except (OSError, sqlite3.DatabaseError, ValueError) as exc:
-        raise HTTPException(
-            status_code=400,
-            detail="不是有效的 ResearchMate 工作区数据库",
-        ) from exc
+            conn.execute("DELETE FROM workspaces WHERE db_path = ?", (imported.db_path,))
+            conn.commit()
+        except Exception:
+            conn.rollback()
+        try:
+            delete_workspace_file(imported.db_path)
+        except Exception:
+            pass
+        if isinstance(exc, HTTPException):
+            raise
+        raise HTTPException(status_code=500, detail="工作区注册失败") from exc
+    finally:
+        conn.close()
+    return {
+        "ok": True,
+        "name": imported.name,
+        "db_path": imported.db_path,
+        "legacy_database_only": imported.legacy_database_only,
+    }
 
 
 @router.post("/workspaces/current/clear")

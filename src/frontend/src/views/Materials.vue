@@ -3,9 +3,12 @@
     <div class="page-head">
       <div>
         <h1 class="page-title">资料中心</h1>
-        <p class="text-secondary text-small">支持文字和图片导入；AI 仅在明确确认范围后调用，OCR 只使用本地处理器。</p>
+        <p class="text-secondary text-small">
+          图片支持 PNG/JPEG/WebP，最大 10 MB、最长边 12,000 像素、总计 4,000 万像素；后端完整解码后才保存。OCR 只使用本机 Tesseract。
+        </p>
       </div>
       <div class="head-actions">
+        <el-button :disabled="selectedIds.length === 0" @click="openActionProject">建立行动专题（{{ selectedIds.length }}）</el-button>
         <el-button :disabled="selectedIds.length < 2" @click="openComparison">比较所选（{{ selectedIds.length }}）</el-button>
         <el-button @click="showDiscovery = true">发现 arXiv 候选</el-button>
         <el-button @click="showUrlImport = true">导入公开 URL</el-button>
@@ -44,7 +47,14 @@
           <h3>{{ candidate.title }}</h3>
           <a :href="candidate.source_url" target="_blank" rel="noopener noreferrer">{{ candidate.source_url }}</a>
           <p>{{ candidate.summary }}</p>
-          <span class="text-small text-secondary">采集器：{{ candidate.source_facts?.collector }} · {{ formatTime(candidate.created_at) }}</span>
+          <span class="text-small text-secondary">
+            采集器：{{ candidate.source_facts?.collector }}
+            <template v-if="candidate.source_facts?.authors?.length"> · 作者：{{ candidate.source_facts.authors.join('、') }}</template>
+            <template v-if="candidate.source_facts?.categories?.length"> · 分类：{{ candidate.source_facts.categories.join('、') }}</template>
+            <template v-if="candidate.source_facts?.charset"> · 字符集：{{ candidate.source_facts.charset }}</template>
+            <template v-if="candidate.source_facts?.redirect_count"> · 重定向：{{ candidate.source_facts.redirect_count }} 次</template>
+            · {{ formatTime(candidate.created_at) }}
+          </span>
         </div>
         <div class="candidate-actions">
           <el-button size="small" @click="rejectUrlCandidate(candidate)">拒绝</el-button>
@@ -219,7 +229,10 @@
         <pre class="material-content">{{ selected.content_text }}</pre>
         <div v-if="selected.assets?.length" class="asset-list">
           <img v-for="asset in selected.assets" :key="asset.id" :src="`/api/assets/${asset.id}/content`" :alt="asset.original_name" />
-          <el-button :loading="ocrRunning" @click="runOcr">运行本地 OCR</el-button>
+          <p class="text-small text-secondary">
+            每次点击都会新建一条本地 OCR 审计运行；不会复用旧成功结果，也不会自动更改已接受文本。
+          </p>
+          <el-button :loading="ocrRunning" @click="runOcr">{{ hasOcrRuns ? '重新运行本地 OCR' : '运行本地 OCR' }}</el-button>
         </div>
         <section v-if="latestOcrRun" class="accepted-extraction-panel">
           <el-divider />
@@ -380,11 +393,44 @@
         </article>
       </div>
     </el-dialog>
+
+    <el-dialog v-model="showActionProject" title="从所选资料建立行动专题" width="680px" :close-on-click-modal="false">
+      <p class="text-secondary text-small">
+        下列资料将按当前选择顺序成为证据。专题只保存你的组织、笔记和下一步，不会修改资料来源事实。
+      </p>
+      <ol class="comparison-list">
+        <li v-for="item in actionProjectItems" :key="item.id">#{{ item.id }} {{ item.title }}</li>
+      </ol>
+      <el-form label-position="top">
+        <el-form-item label="专题标题">
+          <el-input v-model="actionProjectDraft.title" maxlength="200" />
+        </el-form-item>
+        <el-form-item label="目标">
+          <el-input v-model="actionProjectDraft.objective" type="textarea" :rows="2" maxlength="2000" />
+        </el-form-item>
+        <el-form-item label="用户笔记">
+          <el-input v-model="actionProjectDraft.notes" type="textarea" :rows="4" maxlength="12000" />
+        </el-form-item>
+        <el-form-item label="明确下一步">
+          <el-input v-model="actionProjectDraft.next_action" maxlength="1000" />
+        </el-form-item>
+      </el-form>
+      <template #footer>
+        <el-button @click="showActionProject = false">取消</el-button>
+        <el-button
+          type="primary"
+          :loading="creatingActionProject"
+          :disabled="!actionProjectDraft.title.trim() || actionProjectItems.length === 0"
+          @click="submitActionProject"
+        >创建并打开专题</el-button>
+      </template>
+    </el-dialog>
   </div>
 </template>
 
 <script setup>
 import { computed, reactive, ref, onMounted } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import WorkspaceManager from '@/components/WorkspaceManager.vue'
 import { useWorkspaceStore } from '@/stores/workspace'
@@ -392,6 +438,7 @@ import {
   acceptCandidate,
   acceptItemExtraction,
   clearWorkspace,
+  createActionProject,
   createItem,
   createItemAnalysisRun,
   createComparisonRun,
@@ -420,6 +467,8 @@ const typeOptions = [
   { label: 'Debug', value: 'debug' },
 ]
 const workspaceStore = useWorkspaceStore()
+const route = useRoute()
+const router = useRouter()
 const statusOptions = [
   { label: '收件箱', value: 'inbox' },
   { label: '处理中', value: 'active' },
@@ -439,6 +488,9 @@ const analyzing = ref(false)
 const runsLoading = ref(false)
 const analysisRuns = ref([])
 const selectedIds = ref([])
+const showActionProject = ref(false)
+const creatingActionProject = ref(false)
+const actionProjectDraft = reactive({ title: '', objective: '', notes: '', next_action: '' })
 const imageInput = ref(null)
 const ocrRunning = ref(false)
 const acceptingExtraction = ref(false)
@@ -492,6 +544,7 @@ const analysisDraft = reactive({ analysis_type: 'classify', input_fields: ['titl
 const latestOcrRun = computed(() => analysisRuns.value.find(
   (run) => run.run_kind === 'ocr' && run.status === 'succeeded' && run.result?.text,
 ))
+const hasOcrRuns = computed(() => analysisRuns.value.some((run) => run.run_kind === 'ocr'))
 const acceptedOcr = computed(() => selected.value?.accepted_extractions?.find(
   (entry) => entry.extraction_kind === 'ocr',
 ))
@@ -694,6 +747,33 @@ function toggleSelection(id, checked) {
     : selectedIds.value.filter((value) => value !== id)
 }
 const comparisonItems = computed(() => items.value.filter((item) => selectedIds.value.includes(item.id)))
+const actionProjectItems = computed(() => selectedIds.value.map(
+  (id) => items.value.find((item) => item.id === id),
+).filter(Boolean))
+
+function openActionProject() {
+  if (actionProjectItems.value.length === 0) return
+  Object.assign(actionProjectDraft, {
+    title: '', objective: '', notes: '', next_action: '',
+  })
+  showActionProject.value = true
+}
+
+async function submitActionProject() {
+  creatingActionProject.value = true
+  try {
+    const result = await workspaceStore.runMutation(() => createActionProject({
+      ...actionProjectDraft,
+      item_ids: actionProjectItems.value.map((item) => item.id),
+    }))
+    showActionProject.value = false
+    selectedIds.value = []
+    ElMessage.success('行动专题已创建')
+    await router.push({ path: '/actions', query: { project: result.project.id } })
+  } catch (error) {
+    ElMessage.error(error.response?.data?.detail || '行动专题创建失败')
+  } finally { creatingActionProject.value = false }
+}
 
 async function openComparison() {
   showComparison.value = true
@@ -718,6 +798,11 @@ async function runComparison() {
 async function uploadImage(event) {
   const file = event.target.files?.[0]
   if (!file) return
+  if (file.size > 10 * 1024 * 1024) {
+    ElMessage.error('图片不能超过 10 MB')
+    event.target.value = ''
+    return
+  }
   try {
     const result = await importImage(file)
     await loadItems()
@@ -732,7 +817,7 @@ async function runOcr() {
   try {
     await runItemOcr(selected.value.id)
     await loadAnalysisRuns()
-    ElMessage.success('本地 OCR 完成')
+    ElMessage.success('新的 OCR 审计运行已完成；已接受文本未改变')
   } catch (error) {
     await loadAnalysisRuns()
     ElMessage.error(error.response?.data?.detail || '本地 OCR 失败')
@@ -785,7 +870,12 @@ function runStatusLabel(value) {
   return { running: '运行中', succeeded: '成功', failed: '失败' }[value] || value
 }
 function runKindLabel(value) {
-  return { classify: '类型建议', extract: '摘要与字段提取', ocr: '本地 OCR' }[value] || value
+  return {
+    classify: '类型建议',
+    extract: '摘要与字段提取',
+    ocr: '本地 OCR',
+    template_extract: '本地模板提取',
+  }[value] || value
 }
 function scopeLabel(fields = []) {
   const labels = {
@@ -851,7 +941,13 @@ function resetDraft() {
   Object.assign(draft, { content_text: '', title: '', item_type: 'auto', tags: '', source_url: '' })
 }
 
-onMounted(() => Promise.all([loadItems(), loadCandidateData()]))
+onMounted(async () => {
+  await Promise.all([loadItems(), loadCandidateData()])
+  const requestedItemId = Number(route.query.item)
+  if (Number.isInteger(requestedItemId) && requestedItemId > 0) {
+    await openDetail({ id: requestedItemId })
+  }
+})
 </script>
 
 <style scoped>

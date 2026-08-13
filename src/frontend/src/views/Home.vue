@@ -21,6 +21,12 @@
         to="/papers"
       />
       <NavCard
+        icon="Aim"
+        title="行动专题"
+        description="把明确选择的资料组织为证据清单，维护自己的结论和下一步"
+        to="/actions"
+      />
+      <NavCard
         icon="Notebook"
         title="使用文档"
         description="快速上手指南 + 完整使用手册，从安装到高级配置覆盖所有功能"

@@ -1,3 +1,4 @@
+import gzip
 import sqlite3
 import sys
 import tempfile
@@ -13,7 +14,9 @@ BACKEND = ROOT / "src" / "backend"
 sys.path.insert(0, str(BACKEND))
 
 from api.routes.discoveries import create_arxiv_discovery
-from crawlers.arxiv_discovery import ArxivDiscoveryCollector, DiscoveredRecord
+from crawlers.arxiv_discovery import (
+    ARXIV_API_URL, MAX_RESPONSE_BYTES, ArxivDiscoveryCollector, DiscoveredRecord,
+)
 from services.discoveries import discover_arxiv, list_collection_jobs
 from services.url_imports import accept_candidate
 from storage.models import ArxivDiscoveryRequest
@@ -96,6 +99,69 @@ class DiscoveryTests(unittest.IsolatedAsyncioTestCase):
         records = ArxivDiscoveryCollector().parse_atom(xml, limit=1)
         self.assertEqual(records[0].source_url, "https://arxiv.org/abs/2608.12345")
         self.assertEqual(records[0].source_facts["authors"], ["Alice"])
+        self.assertTrue(records[0].source_facts["fetched_at"].endswith("+00:00"))
+
+    async def test_offline_arxiv_request_is_bounded_and_preserves_provenance(self):
+        requests = []
+        xml = """<?xml version="1.0" encoding="UTF-8"?>
+        <feed xmlns="http://www.w3.org/2005/Atom">
+          <entry><id>https://arxiv.org/abs/2608.54321v2</id>
+          <published>2026-08-12T00:00:00Z</published>
+          <title> Bounded Fixture </title><summary> Offline abstract. </summary>
+          <author><name>Alice</name></author><author><name>Bob</name></author>
+          <category term="cs.IR" /></entry></feed>"""
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            requests.append(request)
+            return httpx.Response(
+                200,
+                headers={"Content-Type": "application/atom+xml; charset=UTF-8"},
+                text=xml,
+                request=request,
+            )
+
+        collector = ArxivDiscoveryCollector(transport=httpx.MockTransport(handler))
+        records = await collector.search("local retrieval", 1)
+        self.assertEqual(len(requests), 1)
+        self.assertEqual(str(requests[0].url.copy_with(query=None)), ARXIV_API_URL)
+        self.assertEqual(requests[0].url.params["search_query"], "all:local retrieval")
+        self.assertEqual(requests[0].url.params["max_results"], "1")
+        self.assertEqual(records[0].source_facts["arxiv_id"], "2608.54321v2")
+        self.assertEqual(records[0].source_facts["authors"], ["Alice", "Bob"])
+        self.assertEqual(records[0].source_facts["categories"], ["cs.IR"])
+        self.assertEqual(records[0].source_facts["published"], "2026-08-12T00:00:00Z")
+
+    async def test_arxiv_http_type_size_encoding_and_xml_failures_are_stable(self):
+        fixtures = (
+            (503, "application/atom+xml", b"", "HTTP 503"),
+            (200, "text/html", b"<html>error</html>", "非 Atom XML"),
+            (200, "application/atom+xml", b"\xff\xfe", "UTF-8"),
+            (200, "application/atom+xml", b"<feed>", "无效 Atom XML"),
+            (
+                200,
+                "application/atom+xml",
+                gzip.compress(b"<feed>" + b"x" * MAX_RESPONSE_BYTES + b"</feed>"),
+                "超过 2 MB",
+            ),
+        )
+        for status, content_type, content, error in fixtures:
+            def handler(
+                request: httpx.Request,
+                status=status,
+                content_type=content_type,
+                content=content,
+                error=error,
+            ) -> httpx.Response:
+                headers = {"Content-Type": content_type}
+                if error == "超过 2 MB":
+                    headers["Content-Encoding"] = "gzip"
+                return httpx.Response(
+                    status, headers=headers, content=content, request=request
+                )
+
+            collector = ArxivDiscoveryCollector(transport=httpx.MockTransport(handler))
+            with self.subTest(error=error), self.assertRaisesRegex(RuntimeError, error):
+                await collector.search("fixture", 1)
 
     async def test_api_returns_job_and_candidates(self):
         expected = ({"id": 1}, [{"id": 2}])

@@ -2,6 +2,7 @@
 import re
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 
 import httpx
@@ -9,6 +10,10 @@ import httpx
 
 ARXIV_API_URL = "https://export.arxiv.org/api/query"
 ATOM = "{http://www.w3.org/2005/Atom}"
+MAX_RESPONSE_BYTES = 2 * 1024 * 1024
+ALLOWED_CONTENT_TYPES = {
+    "application/atom+xml", "application/xml", "text/xml",
+}
 
 
 @dataclass(frozen=True)
@@ -35,17 +40,28 @@ class ArxivDiscoveryCollector:
             trust_env=False,
             headers={"User-Agent": "ResearchMate/0.1 (local research workspace)"},
         ) as client:
-            response = await client.get(ARXIV_API_URL, params={
+            async with client.stream("GET", ARXIV_API_URL, params={
                 "search_query": f"all:{query}",
                 "start": 0,
                 "max_results": limit,
                 "sortBy": "relevance",
                 "sortOrder": "descending",
-            })
-            response.raise_for_status()
-        if len(response.content) > 2 * 1024 * 1024:
-            raise RuntimeError("arXiv API 响应超过 2 MB 限制")
-        return self.parse_atom(response.text, limit=limit)
+            }) as response:
+                if response.status_code != 200:
+                    raise RuntimeError(f"arXiv API 返回 HTTP {response.status_code}")
+                content_type = response.headers.get("content-type", "").split(";", 1)[0]
+                if content_type.strip().lower() not in ALLOWED_CONTENT_TYPES:
+                    raise RuntimeError("arXiv API 返回了非 Atom XML 内容")
+                content = bytearray()
+                async for chunk in response.aiter_bytes():
+                    content.extend(chunk)
+                    if len(content) > MAX_RESPONSE_BYTES:
+                        raise RuntimeError("arXiv API 响应超过 2 MB 限制")
+        try:
+            xml_text = bytes(content).decode("utf-8-sig")
+        except UnicodeDecodeError as exc:
+            raise RuntimeError("arXiv API 返回了无法按 UTF-8 解码的 Atom XML") from exc
+        return self.parse_atom(xml_text, limit=limit)
 
     def parse_atom(self, xml_text: str, *, limit: int) -> list[DiscoveredRecord]:
         try:
@@ -53,6 +69,7 @@ class ArxivDiscoveryCollector:
         except ET.ParseError as exc:
             raise RuntimeError("arXiv API 返回了无效 Atom XML") from exc
         records = []
+        fetched_at = datetime.now(timezone.utc).isoformat()
         for entry in root.findall(f"{ATOM}entry")[:limit]:
             title = self._text(entry, "title")
             abstract = self._text(entry, "summary")
@@ -80,6 +97,7 @@ class ArxivDiscoveryCollector:
                     "authors": authors,
                     "categories": [value for value in categories if value],
                     "published": self._text(entry, "published") or None,
+                    "fetched_at": fetched_at,
                     "suggested_item_type": "paper",
                 },
             ))

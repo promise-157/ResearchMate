@@ -130,6 +130,26 @@ export function fetchSimilarItems(id, params) {
   return api.get(`/items/${id}/similar`, { params })
 }
 
+export function fetchActionProjects() {
+  return api.get('/action-projects')
+}
+
+export function createActionProject(data) {
+  return api.post('/action-projects', data)
+}
+
+export function fetchActionProject(id) {
+  return api.get(`/action-projects/${id}`)
+}
+
+export function updateActionProject(id, data) {
+  return api.patch(`/action-projects/${id}`, data)
+}
+
+export function replaceActionProjectMaterials(id, itemIds) {
+  return api.put(`/action-projects/${id}/materials`, { item_ids: itemIds })
+}
+
 export function createUrlImport(url) {
   return api.post('/url-imports', { url }, { timeout: 35000 })
 }
@@ -255,8 +275,8 @@ export function deleteWorkspace(id) {
 export function clearWorkspace() {
   return api.post('/workspaces/current/clear')
 }
-export function getExportUrl() {
-  return '/api/workspace/export'
+export function exportWorkspaceArchive() {
+  return api.get('/workspace/export', { responseType: 'blob', timeout: 130000 })
 }
 
 export function importWorkspace(file) {
@@ -264,5 +284,6 @@ export function importWorkspace(file) {
   form.append('file', file)
   return api.post('/workspace/import', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
+    timeout: 130000,
   })
 }

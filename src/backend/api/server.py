@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from api.routes import cart, chat, crawl, discoveries, docs, items, journals, keywords, papers, settings, stats, url_imports, workspace_reviews, workspaces
+from api.routes import action_projects, cart, chat, crawl, discoveries, docs, items, journals, keywords, papers, settings, stats, url_imports, workspace_reviews, workspaces
 from config import get
 from storage.database import init_db
 
@@ -47,6 +47,7 @@ app.include_router(chat.router, prefix="/api", tags=["chat"])
 app.include_router(items.router, prefix="/api", tags=["items"])
 app.include_router(url_imports.router, prefix="/api", tags=["url-imports"])
 app.include_router(discoveries.router, prefix="/api", tags=["discoveries"])
+app.include_router(action_projects.router, prefix="/api", tags=["action-projects"])
 
 
 @app.on_event("startup")
