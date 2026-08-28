@@ -24,7 +24,7 @@
 | M15 | 1 万/5 万条多语言临时 SQLite 对比 LIKE 与 FTS5，基于延迟、语义和体积证据暂不迁移 |
 | M16 | 当前工作区内从 1–20 条明确选择的资料建立行动专题，持久保存目标、用户笔记、下一步、状态和有序证据 |
 
-最新已验证基线（Windows + WSL 透明源码安装，2026-08-28）：后端 138 项、`compileall`、Ruff、前端 lint/生产构建、Windows Debug/Release 构建、宿主离线契约及 PowerShell 5.1 语法通过；真实本机 WSL 生命周期探针、可见 fixture 窗口、约 119 MiB 自包含发布、只读全依赖检查、JSON 计划及严格 Apply、同路径升级、无参数唯一快捷方式、独立配置/所有权清单和无升级残留均已验证。尚未在一台陌生纯净虚拟机执行从零验收，不能写成一键正式发行版。桌面探针只使用 `/tmp` 假后端和本机健康检查，不读取 `src/data/`，不调用真实 AI、真实来源或真实 Key。M16 的 Playwright 16 项基线与 M13 经授权的四次受控公开请求事实保持不变。生产构建仍有 M8-P1 的大 chunk 和第三方 PURE 注释提示。
+最新已验证基线（Windows + WSL 与原生 Linux source-backed 桌面，2026-08-28）：后端/桌面 142 项通过（受限沙箱内 1 项 Unix socket skip，沙箱外同项单独通过），`compileall`、Ruff、前端 lint/生产构建、Windows Debug/Release 构建、宿主离线契约及 PowerShell 5.1 语法通过。Windows + WSL 的真实生命周期、可见 fixture、自包含发布、透明计划安装和无参数快捷方式保持通过。Linux 的全依赖检查、JSON 计划、临时 XDG 安装/配置/完整卸载、用户级真实安装、单实例 socket、WSLg/X11 fixture 退出、端口释放及无进程/socket 残留通过；fixture 页面内容仍待用户目视确认。两端均未在陌生纯净目标机从零验收，不能写成一键正式发行版。桌面探针只使用临时假后端和本机健康检查，不读取 `src/data/`，不调用真实 AI、真实来源或真实 Key。M16 的 Playwright 16 项基线与 M13 经授权的四次受控公开请求事实保持不变。生产构建仍有 M8-P1 的大 chunk 和第三方 PURE 注释提示。
 
 ## 已完成：M11 统一论文 AI、资料 AI 与聊天
 
@@ -232,6 +232,17 @@ source-backed 安装，不是陌生机器的一键正式发行版；品牌图标
 3. Windows + WSL 正式交付：在 M17 后基于透明源码向导补品牌图标、预编译 GitHub Release、基础依赖官方入口整合和纯净虚拟机验收，不扩张到三端全家桶。
 4. M8-P1：先测首屏与路由加载，再决定是否拆包；不为消除构建警告而重构。
 5. 新具名来源只在出现明确用户价值后立项，每个来源单独完成限制、provenance 和离线 fixture。
+
+## 原生 Linux source-backed 桌面
+
+2026-08-28 已实现第二个平台最小切片：系统 Python GTK 3/WebKitGTK 宿主显示同一 Vue/FastAPI 应用，
+直接复用私有 supervisor 和确切进程组关闭契约；用户 Unix socket 保证第二次启动激活已有窗口。
+透明 Python 向导检查源码、Conda/Python、后端依赖、前端 production build、GTK/WebKitGTK 和可选
+Tesseract，生成 JSON 计划后才把宿主、`researchmate` 命令、`.desktop` 与配置安装到 XDG 用户目录。
+临时 XDG HOME 中的计划、安装、配置校验和完整卸载往返通过，卸载不触碰系统包、工具链、源码、
+环境、工作区、资产、归档或 Key。当前 WSL 已补充 WebKitGTK introspection（新增两个包约 775 KiB）
+用于 WSLg/X11 fixture 验证；原生发行版的应用菜单及 Wayland/X11 差异仍需要目标机验收，不能称为
+通用 Linux 正式安装包。
 
 ## 新会话交接
 

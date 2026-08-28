@@ -27,6 +27,7 @@ obj/
 *.user
 packaging/windows-wsl/artifacts/
 researchmate-install-plan.json
+researchmate-linux-install-plan.json
 
 # === Node / Frontend ===
 node_modules/

@@ -245,16 +245,30 @@ supervisor 是桌面模式唯一的后端进程所有者：
 - 真实验证 `conda run`/bootstrap 的 stdin、EOF 和 signal 透传，不能只依赖模拟测试。
 - 真实验证宿主崩溃、supervisor 崩溃和长请求退出，不留下无法识别的孤儿后端。
 
-该技术验证已经通过，下一产品切片回到 ROADMAP 的 M17；不要在一个切片内同时实现三个平台安装器。
+Windows + WSL 技术验证已经通过。随后出现第二个真实平台用例，已提取并复用既有 supervisor 协议，
+但没有复制业务核心或提前扩张到原生 Windows。
+
+## 原生 Linux 桌面切片（2026-08-28）
+
+`packaging/linux/` 提供系统 Python GTK 3/WebKitGTK 宿主以及透明的 `check -> plan -> apply` 用户级
+安装。宿主直接启动同一个 `src/backend/desktop_runtime.py`，通过用户私有 Unix lock/socket 实现
+单实例激活，关闭窗口使用同一实例绑定 shutdown 帧并只对已确认进程组升级。配置、宿主、命令、
+`.desktop`、日志和运行 socket 遵循 XDG 目录，不使用 systemd 常驻服务。
+
+向导按真实非交互环境检查源码、Conda/Python、后端包、前端 production build、系统
+Python/PyGObject/GTK/WebKitGTK 和可选 Tesseract；它不调用发行版包管理器。安装使用 staging/previous
+并回滚宿主与用户入口，清单明确系统图形包、工具链、源码、环境和工作区不归卸载器所有。临时 XDG
+目录中的计划、安装、配置读取与完整卸载往返已通过；当前 WSLg/X11 可用于验证窗口和关闭生命周期，
+但原生发行版 `.desktop` 菜单、Wayland/X11 和包名差异仍需独立目标环境验收。
 
 ## 后续平台演进
 
 推荐顺序：
 
 1. Windows + WSL 最小宿主及生命周期验证。
-2. 回到并完成 M17 首个行动简报纵向切片。
-3. 将运行数据、配置、缓存和日志从源码布局抽象到稳定用户目录，同时保持现有数据迁移安全。
-4. 增加 Linux 桌面入口；此时出现第二个真实用例，再提取共享 runtime 接口。
+2. 原生 Linux 最小桌面宿主、XDG 安装与 WSLg/X11 生命周期验证。
+3. 回到并完成 M17 首个行动简报纵向切片。
+4. 将业务运行数据从源码布局抽象到稳定用户目录，同时保持现有数据迁移安全；桌面配置、缓存和日志已经平台化。
 5. 增加 Windows 原生后端适配，尽量复用 Windows 桌面宿主。
 6. 建立共享测试加 Windows/Linux 平台构建矩阵。
 7. 有真实需求后再单独评估浏览器保存、剪贴板快速导入、文件“发送到 ResearchMate”、托盘和

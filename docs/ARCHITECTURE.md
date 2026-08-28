@@ -18,6 +18,11 @@ UI -> API -> service -> repository 边界。桌面打包实现位于 `packaging/
 `%LOCALAPPDATA%\ResearchMate\desktop-config.json`。安装清单区分宿主所有文件与用户所有的 WSL、
 工具链、源码和工作区，卸载器只能删除前者。
 
+原生 Linux 桌面宿主使用系统 Python 的 GTK 3/WebKitGTK 显示相同页面，并直接启动同一个私有
+supervisor。用户级 Unix lock/socket 提供单实例激活；配置、日志、宿主、命令和 `.desktop` 遵循
+XDG 目录。它不引入第二套后端或常驻 systemd 服务，关闭窗口遵循与 Windows 宿主相同的确切进程组
+退出契约。
+
 ## 核心模型
 
 - `items`：规范化资料项和用户工作流状态。

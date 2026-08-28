@@ -12,7 +12,7 @@ ResearchMate 是本地优先的个人资料助手：把文字、图片、公开�
 | --- | --- | --- |
 | Windows + WSL 2 桌面窗口 | 当前支持 | 下方透明配置向导 |
 | WSL/Linux 源码运行 | 当前支持 | [快速上手](docs/QUICKSTART.md) |
-| 原生 Linux 桌面包 | 尚未发布 | 不会安装 Windows 组件 |
+| 原生 Linux 桌面窗口 | 当前支持 source-backed 安装 | [原生 Linux 安装说明](docs/INSTALL_LINUX.md) |
 | 原生 Windows 后端 | 尚未发布 | 不会伪装为当前 WSL 版本 |
 
 ## Windows + WSL：从纯净环境安装
@@ -122,6 +122,28 @@ powershell.exe -NoProfile -ExecutionPolicy Bypass -File \
 
 完整安装、重新配置、故障诊断和卸载边界见
 [Windows + WSL 安装说明](docs/INSTALL_WINDOWS_WSL.md)。
+
+## 原生 Linux 桌面窗口
+
+原生 Linux 使用同一 Vue/FastAPI 核心和 supervisor，不安装 Windows、WSL、WebView2 或 .NET 组件。
+用户自行准备 GTK 3、PyGObject 和 WebKitGTK 4.1/4.0 后，运行：
+
+```bash
+python3 packaging/linux/setup_researchmate.py --mode check \
+  --conda /absolute/path/to/conda
+python3 packaging/linux/setup_researchmate.py --mode plan \
+  --conda /absolute/path/to/conda
+```
+
+审查 `researchmate-linux-install-plan.json` 后执行：
+
+```bash
+python3 packaging/linux/setup_researchmate.py --mode apply
+```
+
+安装后运行 `researchmate` 或从应用菜单打开。GTK/WebKit 窗口关闭时会停止它拥有的后端；第二次启动
+只激活已有窗口。配置、日志、命令和 `.desktop` 均位于当前用户的 XDG 目录，卸载不删除系统包、
+Conda 环境、源码或工作区。详见 [原生 Linux 安装说明](docs/INSTALL_LINUX.md)。
 
 ## 源码启动
 
