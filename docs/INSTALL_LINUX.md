@@ -1,5 +1,7 @@
 # 原生 Linux 桌面安装
 
+[返回项目首页](../README.md) · [Windows + WSL 安装](INSTALL_WINDOWS_WSL.md) · [开发与验证](DEVELOPMENT.md)
+
 原生 Linux 版不是 WSL 包装：GTK 3/WebKitGTK 窗口、FastAPI 后端、配置和进程都在同一个 Linux 用户
 会话中运行。它复用现有 Vue 页面和私有 supervisor；关闭唯一窗口只停止该窗口拥有的后端进程组，
 不会关机、注销或结束其他服务。第二次运行 `researchmate` 会通过用户私有 Unix socket 激活已有窗口。

@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Reorganized the repository README into a concise platform chooser and shortest-path guide, with detailed Windows + WSL, native Linux, development, verification and uninstall instructions linked as dedicated documents.
 - Reframed the product as a local-first general material assistant with paper, job, and Debug templates.
 - Added the first generic text-material vertical slice: normalized import, exact deduplication, local type suggestions, search/filter/detail, persisted status, and workspace counts.
 - Added explicit single-material AI classification and field extraction with confirmed input scope, bounded text, validated suggestions, reusable successes, and persisted audit/error history.

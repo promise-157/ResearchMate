@@ -1,5 +1,7 @@
 # Windows + WSL 安装与卸载
 
+[返回项目首页](../README.md) · [原生 Linux 安装](INSTALL_LINUX.md) · [开发与验证](DEVELOPMENT.md)
+
 本文是 README 快速流程的完整边界说明。当前交付是 source-backed Windows + WSL 桌面版：Windows
 宿主显示已有 Vue 页面并管理一次 WSL 后端生命周期，源码、Python 环境和工作区仍位于用户选择的
 WSL 发行版中。它不是原生 Windows 后端。
