@@ -7,6 +7,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -14,6 +15,7 @@ import tempfile
 from datetime import datetime, timezone
 
 SCHEMA_VERSION = 1
+SAFE_ENVIRONMENT = re.compile(r"^[A-Za-z0-9_.-]+$")
 
 
 def xdg(variable: str, fallback: str) -> Path:
@@ -96,6 +98,13 @@ def display_checks(checks: list[dict[str, object]]) -> None:
             print(f"  Remedy: {check['remedy']}")
 
 
+def desktop_exec(path: Path) -> str:
+    value = str(path)
+    if "\n" in value or "\r" in value:
+        raise ValueError("desktop launcher path contains a newline")
+    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
 def install(plan: dict[str, object], script_directory: Path) -> None:
     install_dir = Path(str(plan["install_directory"])).expanduser()
     config_path = Path(str(plan["config_path"])).expanduser()
@@ -146,7 +155,7 @@ def install(plan: dict[str, object], script_directory: Path) -> None:
         desktop_path.parent.mkdir(parents=True, exist_ok=True)
         desktop_path.write_text(
             "[Desktop Entry]\nType=Application\nName=ResearchMate\n"
-            f"Exec={launcher_path}\nTerminal=false\nCategories=Office;Utility;\n",
+            f"Exec={desktop_exec(launcher_path)}\nTerminal=false\nCategories=Office;Utility;\n",
             encoding="utf-8",
         )
         desktop_path.chmod(0o755)
@@ -204,6 +213,11 @@ def main() -> int:
         ]
         args.conda = next((item for item in candidates if item.is_file()), Path("/missing/conda"))
 
+    if not SAFE_ENVIRONMENT.fullmatch(args.environment):
+        parser.error("environment name contains unsupported characters")
+    if not 1 <= args.port <= 65535:
+        parser.error("port must be between 1 and 65535")
+
     checks = check_environment(args.project.resolve(), args.conda.resolve(), args.environment)
     display_checks(checks)
     failed = [check for check in checks if check["required"] and not check["ok"]]
@@ -212,6 +226,9 @@ def main() -> int:
 
     config_home = xdg("XDG_CONFIG_HOME", ".config")
     data_home = xdg("XDG_DATA_HOME", ".local/share")
+    state_home = xdg("XDG_STATE_HOME", ".local/state")
+    cache_home = xdg("XDG_CACHE_HOME", ".cache")
+    runtime_home = Path(os.environ.get("XDG_RUNTIME_DIR", cache_home)).expanduser()
     plan = {
         "schema_version": SCHEMA_VERSION,
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -228,6 +245,10 @@ def main() -> int:
             str(config_home / "researchmate/desktop-config.json"),
             str(Path.home() / ".local/bin/researchmate"),
             str(data_home / "applications/researchmate.desktop"),
+        ],
+        "optional_local_state": [
+            str(state_home / "researchmate"),
+            str(runtime_home / "researchmate"),
         ],
         "external_dependencies_not_owned": [
             "Linux operating system and desktop session", "system Python/PyGObject/GTK/WebKitGTK",

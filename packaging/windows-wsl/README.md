@@ -39,9 +39,9 @@ The low-level installer remains available for development after replacing the va
 ```powershell
 powershell.exe -NoProfile -ExecutionPolicy Bypass -File `
   packaging/windows-wsl/installer/Install-ResearchMate.ps1 `
-  -Distro Ubuntu20.04 `
-  -ProjectPath /home/promise/ResearchMate `
-  -CondaExecutable /home/promise/miniconda3/condabin/conda `
+  -Distro Ubuntu `
+  -ProjectPath /home/alice/ResearchMate `
+  -CondaExecutable /home/alice/miniforge3/condabin/conda `
   -PublishedHostDirectory packaging/windows-wsl/artifacts/win-x64
 ```
 
@@ -72,10 +72,10 @@ The real probes require the explicit local WSL values and still use only disposa
 
 ```powershell
 dotnet packaging/windows-wsl/host-tests/bin/Debug/net10.0-windows/ResearchMate.WindowsWslHost.Tests.dll `
-  --real-wsl Ubuntu20.04 /home/promise/ResearchMate /home/promise/miniconda3/condabin/conda
+  --real-wsl Ubuntu /home/alice/ResearchMate /home/alice/miniforge3/condabin/conda
 
 dotnet packaging/windows-wsl/host-tests/bin/Debug/net10.0-windows/ResearchMate.WindowsWslHost.Tests.dll `
-  --real-host Ubuntu20.04 /home/promise/ResearchMate /home/promise/miniconda3/condabin/conda
+  --real-host Ubuntu /home/alice/ResearchMate /home/alice/miniforge3/condabin/conda
 ```
 
 Those values are examples for the current development machine, not portable defaults.

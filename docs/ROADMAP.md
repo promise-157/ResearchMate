@@ -24,7 +24,7 @@
 | M15 | 1 万/5 万条多语言临时 SQLite 对比 LIKE 与 FTS5，基于延迟、语义和体积证据暂不迁移 |
 | M16 | 当前工作区内从 1–20 条明确选择的资料建立行动专题，持久保存目标、用户笔记、下一步、状态和有序证据 |
 
-最新已验证基线（Windows + WSL 与原生 Linux source-backed 桌面，2026-08-28）：后端/桌面 142 项通过（受限沙箱内 1 项 Unix socket skip，沙箱外同项单独通过），`compileall`、Ruff、前端 lint/生产构建、Windows Debug/Release 构建、宿主离线契约及 PowerShell 5.1 语法通过。Windows + WSL 的真实生命周期、可见 fixture、自包含发布、透明计划安装和无参数快捷方式保持通过。Linux 的全依赖检查、JSON 计划、临时 XDG 安装/配置/完整卸载、用户级真实安装、单实例 socket、WSLg/X11 fixture 退出、端口释放及无进程/socket 残留通过；fixture 页面内容仍待用户目视确认。两端均未在陌生纯净目标机从零验收，不能写成一键正式发行版。桌面探针只使用临时假后端和本机健康检查，不读取 `src/data/`，不调用真实 AI、真实来源或真实 Key。M16 的 Playwright 16 项基线与 M13 经授权的四次受控公开请求事实保持不变。生产构建仍有 M8-P1 的大 chunk 和第三方 PURE 注释提示。
+最新已验证基线（Windows + WSL 与原生 Linux source-backed 桌面，2026-08-28）：后端/桌面 143 项通过（受限沙箱内 1 项 Unix socket skip，沙箱外同项单独通过），`compileall`、Ruff、前端 lint/生产构建、Windows Debug/Release 构建、宿主离线契约及 PowerShell 5.1 语法通过。Windows + WSL 的真实生命周期、可见 fixture、自包含发布、透明计划安装和无参数快捷方式保持通过。Linux 的全依赖检查、JSON 计划、含空格自定义 XDG 安装/配置/完整卸载、用户级真实安装、单实例 socket、WSLg/X11 fixture 退出、端口释放及无进程/socket 残留通过；fixture 页面内容仍待用户目视确认。两端均未在陌生纯净目标机从零验收，不能写成一键正式发行版。桌面探针只使用临时假后端和本机健康检查，不读取 `src/data/`，不调用真实 AI、真实来源或真实 Key。M16 的 Playwright 16 项基线与 M13 经授权的四次受控公开请求事实保持不变。生产构建仍有 M8-P1 的大 chunk 和第三方 PURE 注释提示。
 
 ## 已完成：M11 统一论文 AI、资料 AI 与聊天
 
@@ -248,4 +248,4 @@ Tesseract，生成 JSON 计划后才把宿主、`researchmate` 命令、`.deskto
 
 先看上方已完成事实与下一最小切片，不要从头重做已完成代码。开始前完整阅读 `PRODUCT.md`、`ARCHITECTURE.md` 和本文件，运行 `git status --short` 并保留全部未提交修改。禁止读取 `src/backend/config.yaml`、真实 Key 或调用真实模型/网络；自动测试只用临时工作区和假 provider。
 
-M16 与之前的 M11–M15、M6-I1 均已完成。M5-I1/M9-I1 需要脱敏真实输入，未取得前不要伪造完成。Windows + WSL 单窗口宿主的有界技术验证和本机 source-backed 安装均已完成；不要重复原型，也不要把它误写成陌生机器的一键正式发布。下一产品切片回到 M17 的显式、可审计行动简报；开始时仍须先追踪 action project 与通用/论文 AI 审计边界，避免另造不兼容生命周期。不要重做 M11–M16 或既有浏览器闭环。
+M16 与之前的 M11–M15、M6-I1 均已完成。M5-I1/M9-I1 需要脱敏真实输入，未取得前不要伪造完成。Windows + WSL 的有界技术验证/本机 source-backed 安装，以及原生 Linux 的 GTK/WebKitGTK/XDG source-backed 切片均已完成；不要重复原型，也不要把任一平台误写成陌生纯净机的一键正式发布。原生 Windows 已明确延期到出现真实需求和长期测试环境之后，不是 M17 前置。下一产品切片回到 M17 的显式、可审计行动简报；开始时仍须先追踪 action project 与通用/论文 AI 审计边界，避免另造不兼容生命周期。不要重做 M11–M16 或既有浏览器闭环。

@@ -16,6 +16,11 @@ SPEC = importlib.util.spec_from_file_location("researchmate_linux_host", HOST_PA
 HOST = importlib.util.module_from_spec(SPEC)
 assert SPEC and SPEC.loader
 SPEC.loader.exec_module(HOST)
+SETUP_PATH = Path(__file__).resolve().parents[1] / "packaging/linux/setup_researchmate.py"
+SETUP_SPEC = importlib.util.spec_from_file_location("researchmate_linux_setup", SETUP_PATH)
+SETUP = importlib.util.module_from_spec(SETUP_SPEC)
+assert SETUP_SPEC and SETUP_SPEC.loader
+SETUP_SPEC.loader.exec_module(SETUP)
 
 
 class LinuxDesktopHostTests(unittest.TestCase):
@@ -60,6 +65,12 @@ class LinuxDesktopHostTests(unittest.TestCase):
         )
         self.assertIn("tests/fixtures/desktop_runtime_harness.py", command)
         self.assertNotIn("sh", command)
+
+    def test_desktop_exec_quotes_paths_with_spaces(self):
+        self.assertEqual(
+            SETUP.desktop_exec(Path("/home/example user/.local/bin/researchmate")),
+            '"/home/example user/.local/bin/researchmate"',
+        )
 
     def test_second_instance_activates_primary_over_private_socket(self):
         with tempfile.TemporaryDirectory() as directory, mock.patch.dict(

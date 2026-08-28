@@ -26,9 +26,11 @@ def main() -> int:
         if path.is_file() or path.is_symlink():
             path.unlink()
     if args.remove_local_state:
-        state = Path.home() / ".local/state/researchmate"
-        cache = Path.home() / ".cache/researchmate"
-        for path in (state, cache):
+        optional_state = [
+            Path(str(item)).expanduser()
+            for item in manifest.get("optional_local_state", [])
+        ]
+        for path in optional_state:
             if path.exists():
                 shutil.rmtree(path)
     shutil.rmtree(install_dir)
