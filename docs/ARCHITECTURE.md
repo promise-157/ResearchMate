@@ -10,6 +10,14 @@ Vue UI -> /api -> application service -> repository -> workspace SQLite
 
 浏览器不直接访问来源或 AI 服务。后端统一负责凭证、输入边界、超时、限速、规范化、审计和错误处理。
 
+Windows + WSL 桌面原型使用 WebView2 显示同一个本机 Vue/FastAPI 应用。Windows 宿主持有私有
+`wsl.exe -> runtime supervisor -> backend process group` 进程树，通过重定向 stdin/EOF 请求退出并
+核对每次内存 instance ID；它不增加公开 shutdown API，不按端口复用或终止未知进程，也不改变
+UI -> API -> service -> repository 边界。桌面打包实现位于 `packaging/windows-wsl/`，不是第二套
+产品核心。Windows 快捷方式不保存个人 WSL 参数；宿主只读取用户通过检查/计划/应用向导确认的
+`%LOCALAPPDATA%\ResearchMate\desktop-config.json`。安装清单区分宿主所有文件与用户所有的 WSL、
+工具链、源码和工作区，卸载器只能删除前者。
+
 ## 核心模型
 
 - `items`：规范化资料项和用户工作流状态。

@@ -1,0 +1,30 @@
+ResearchMate Windows + WSL 宿主彻底卸载教程
+
+普通卸载（保留日志和 WebView 本地状态）：
+1. 先关闭 ResearchMate 窗口。
+2. 打开 Windows“设置 -> 应用 -> 已安装的应用”。
+3. 找到“ResearchMate (Windows + WSL)”并选择卸载。
+
+如果“设置”没有执行 PowerShell 卸载命令，可打开安装目录中的 Uninstall-ResearchMate.ps1，或在
+Windows PowerShell 中把 <安装目录> 替换为 installation-manifest.json 记录的实际路径后运行：
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "<安装目录>\Uninstall-ResearchMate.ps1"
+
+连同 Windows 宿主日志和 WebView 本地状态一起清除：
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File "<安装目录>\Uninstall-ResearchMate.ps1" -RemoveLocalState
+
+卸载会删除：
+- 用户选择的 Windows 安装目录中的桌面宿主；
+- 桌面的 ResearchMate.lnk；
+- 当前 Windows 用户的 ResearchMate 卸载注册项；
+- %LOCALAPPDATA%\ResearchMate\desktop-config.json；
+- 仅在指定 -RemoveLocalState 时删除其余日志和 WebView 本地状态。
+
+卸载不会删除：
+- WSL、Ubuntu 或其他发行版；
+- 用户选择的 ResearchMate 源代码及其中的工作区、资产、归档；
+- Conda/Mamba/Micromamba、Python 环境或任何 Python/Node 依赖；
+- 用于源码构建的 .NET SDK；
+- 任何其他 Windows 或 Linux 文件。
+
+如果卸载提示 ResearchMate 仍在运行，请先关闭它的窗口再重试。不要使用 wsl --shutdown
+作为日常关闭方式；正常关闭窗口会停止本窗口拥有的后端进程。

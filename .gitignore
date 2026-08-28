@@ -21,6 +21,13 @@ env/
 coverage.xml
 htmlcov/
 
+# === .NET desktop host ===
+bin/
+obj/
+*.user
+packaging/windows-wsl/artifacts/
+researchmate-install-plan.json
+
 # === Node / Frontend ===
 node_modules/
 dist/

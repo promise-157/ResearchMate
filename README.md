@@ -6,18 +6,129 @@ ResearchMate 是本地优先的个人资料助手：把文字、图片、公开�
 
 项目不默认下载论文 PDF、镜像网站或绕过登录、付费墙、CAPTCHA、robots 和限流。任意网页抓取默认关闭。
 
-## 安装与启动
+## 选择运行方式
 
-要求 Python 3.11+、Node.js 18+ 和 npm。
+| 环境 | 状态 | 入口 |
+| --- | --- | --- |
+| Windows + WSL 2 桌面窗口 | 当前支持 | 下方透明配置向导 |
+| WSL/Linux 源码运行 | 当前支持 | [快速上手](docs/QUICKSTART.md) |
+| 原生 Linux 桌面包 | 尚未发布 | 不会安装 Windows 组件 |
+| 原生 Windows 后端 | 尚未发布 | 不会伪装为当前 WSL 版本 |
+
+## Windows + WSL：从纯净环境安装
+
+ResearchMate 跨 Windows 和 WSL 运行，因此不存在一个可以安全替用户决定所有路径的通用安装器。
+项目提供只读检查、JSON 安装计划和显式应用三步向导；它不会自动安装或卸载下列用户所有的基础工具。
+
+| 位置 | 依赖 | 用途 | 安装后运行是否仍需要 |
+| --- | --- | --- | --- |
+| Windows | WSL 2 与一个 Linux 发行版 | 承载后端 | 是 |
+| Windows | WebView2 Evergreen Runtime | 桌面窗口 | 是 |
+| Windows | .NET 10 SDK | 从 Git 构建自包含宿主 | 否；未来使用预编译 Release 可免装 |
+| WSL | Git | 克隆和更新源码 | 仅更新时 |
+| WSL | Conda/Mamba/Micromamba 兼容环境、Python 3.11 | 隔离后端依赖 | 是 |
+| WSL | Node.js 18+ 与 npm | 安装 Vue 依赖并生成前端 `dist` | 构建后启动不需要 |
+| WSL | Tesseract 与所需语言包 | 可选的本地图片 OCR | 仅使用 OCR 时 |
+
+Vue、FastAPI 和 Uvicorn 都不是单独的系统安装项：Vue 等前端包由
+`src/frontend/package-lock.json` 固定并由 npm 安装；后端包由
+`src/backend/requirements.txt` 声明。AI Key 和 Ollama 均不是安装前提。
+
+### 1. 用户自行准备基础工具
+
+按照各工具官方说明安装 WSL 2、一个发行版、WebView2、Git、自己选择的 Conda 兼容发行版和
+.NET 10 SDK。安装位置由用户决定。ResearchMate 不会代装或在卸载时删除它们。
+
+如果从 Git 构建，请确保 Windows PowerShell 能运行：
+
+```powershell
+wsl --list --verbose
+dotnet --version
+```
+
+### 2. 在 WSL Linux 文件系统中准备源码
+
+以下命令在 WSL 中运行。建议使用 `/home/<用户>/...`，不要把仓库放进 `/mnt/c` 或 `/mnt/d`：
 
 ```bash
+git clone https://github.com/promise-157/ResearchMate.git
+cd ResearchMate
+
 conda create -n researchmate python=3.11 -y
-conda activate researchmate
-pip install -r src/backend/requirements.txt
-cd src/frontend
-npm install
-cd ../backend
-python run.py
+conda run -n researchmate python -m pip install -r src/backend/requirements.txt
+```
+
+Node/npm 必须能被桌面宿主启动的非交互 Conda 环境找到。可以自行安装系统 Node.js，也可以明确装进
+该环境；下面只是可复现示例，不要求使用 Miniconda：
+
+```bash
+conda install -n researchmate -c conda-forge nodejs=20 -y
+conda run -n researchmate npm --prefix src/frontend ci
+conda run -n researchmate npm --prefix src/frontend run build
+```
+
+如果需要本地图片 OCR，再自行安装 Tesseract 及实际需要的语言包；不安装不会影响其他功能。
+
+### 3. 只读检查
+
+仍在仓库根目录，从 WSL 调用 Windows 配置向导：
+
+```bash
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File \
+  "$(wslpath -w packaging/windows-wsl/setup/Setup-ResearchMate.ps1)" \
+  -Mode Check
+```
+
+向导会从当前 `\\wsl.localhost\<发行版>\...` 仓库路径推导发行版和 Linux 路径，并只读检查 WSL、
+项目、环境、Python 包、Node/npm、Vue 依赖、前端构建、WebView2、.NET 和可选 Tesseract。无法唯一
+判断 Conda 可执行文件时才会询问；也可显式传入：
+
+```text
+-Distro Ubuntu
+-ProjectPath /home/alice/ResearchMate
+-CondaExecutable /home/alice/miniforge3/condabin/conda
+```
+
+### 4. 生成并审查计划
+
+```bash
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File \
+  "$(wslpath -w packaging/windows-wsl/setup/Setup-ResearchMate.ps1)" \
+  -Mode Plan
+```
+
+向导生成被 Git 忽略的 `researchmate-install-plan.json`，列出实际选择和所有写入：
+
+- Windows 宿主安装目录，默认优先 `D:\Apps\ResearchMate`；
+- WSL 发行版、项目绝对路径、环境可执行文件和环境名；
+- `%LOCALAPPDATA%\ResearchMate\desktop-config.json`；
+- 唯一的桌面快捷方式和当前用户卸载项；
+- 不归 ResearchMate 所有、卸载时绝不删除的外部依赖和用户数据。
+
+打开 JSON 确认无误后才继续。
+
+### 5. 应用已确认计划
+
+```bash
+powershell.exe -NoProfile -ExecutionPolicy Bypass -File \
+  "$(wslpath -w packaging/windows-wsl/setup/Setup-ResearchMate.ps1)" \
+  -Mode Apply
+```
+
+首次从 Git 构建会使用 Windows .NET SDK 生成约 120 MiB 的自包含宿主。安装完成后，日常启动不再
+需要 .NET SDK、Node 或 npm。桌面只创建一个 `ResearchMate` 快捷方式；快捷方式不保存个人路径，
+宿主从 `desktop-config.json` 读取用户确认的 WSL 配置。关闭唯一窗口会停止本窗口拥有的后端，不会
+关闭整个 WSL 或影响其他 WSL 进程。
+
+完整安装、重新配置、故障诊断和卸载边界见
+[Windows + WSL 安装说明](docs/INSTALL_WINDOWS_WSL.md)。
+
+## 源码启动
+
+完成上面的 WSL 依赖准备后，也可以不安装桌面宿主：
+
+```bash
+conda run -n researchmate python src/backend/run.py
 ```
 
 启动后通常访问 `http://127.0.0.1:8000`。开发模式（前端热更新）使用：

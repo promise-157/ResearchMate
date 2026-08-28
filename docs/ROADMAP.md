@@ -24,7 +24,7 @@
 | M15 | 1 万/5 万条多语言临时 SQLite 对比 LIKE 与 FTS5，基于延迟、语义和体积证据暂不迁移 |
 | M16 | 当前工作区内从 1–20 条明确选择的资料建立行动专题，持久保存目标、用户笔记、下一步、状态和有序证据 |
 
-最新已验证基线（M16，2026-08-13）：后端 131 项、后端及评估脚本 `compileall`、Ruff 通过；前端 lint、生产构建、Playwright 16 项和 `git diff --check` 通过。图片、归档、数据库与搜索评估全部使用临时目录；普通测试没有读取 `src/data/`，没有调用真实 AI、真实网络或真实 Key。M13 经授权的四次受控公开请求事实保持不变。生产构建仍有 M8-P1 的大 chunk 和第三方 PURE 注释提示。
+最新已验证基线（Windows + WSL 透明源码安装，2026-08-28）：后端 138 项、`compileall`、Ruff、前端 lint/生产构建、Windows Debug/Release 构建、宿主离线契约及 PowerShell 5.1 语法通过；真实本机 WSL 生命周期探针、可见 fixture 窗口、约 119 MiB 自包含发布、只读全依赖检查、JSON 计划及严格 Apply、同路径升级、无参数唯一快捷方式、独立配置/所有权清单和无升级残留均已验证。尚未在一台陌生纯净虚拟机执行从零验收，不能写成一键正式发行版。桌面探针只使用 `/tmp` 假后端和本机健康检查，不读取 `src/data/`，不调用真实 AI、真实来源或真实 Key。M16 的 Playwright 16 项基线与 M13 经授权的四次受控公开请求事实保持不变。生产构建仍有 M8-P1 的大 chunk 和第三方 PURE 注释提示。
 
 ## 已完成：M11 统一论文 AI、资料 AI 与聊天
 
@@ -194,15 +194,47 @@ M16 的首个证据到行动纵向切片判定完成。它不是通用任务管�
 | M8-P1 | 前端主 chunk 仍超过 500 kB；需以首屏收益为依据做路由/组件拆分。 |
 | M9-I1 | 等待用户提供脱敏招聘描述；验证字段覆盖，自由叙述、薪资和年限规范化只按真实缺口扩展。 |
 
+## 已完成技术验证与本机 source-backed 安装：Windows + WSL 桌面宿主
+
+ResearchMate 将保持单仓库、单主干和一套共享产品核心，不建立 Windows、Linux、WSL 三条长期
+平台分支，也不让单个平台安装器引入其他平台依赖。发布目标分为 Windows + WSL 桌面宿主、原生
+Linux 和原生 Windows；安装、进程、用户目录及系统集成留在平台适配/打包边界，API、service、
+storage、Vue UI、schema/migration、审计和归档契约不得复制分叉。
+
+Windows + WSL 最小技术原型已经实现：C#/.NET 10 WinForms WebView2 宿主持有私有 WSL supervisor，
+等待本机 `/api/health` 后显示既有 Vue 页面；用户范围 mutex/named pipe 保证第二次启动只激活原窗，
+关闭窗口通过实例绑定控制帧/EOF 优雅停止确切 Linux process group，超时才强制结束该组。端口已有
+listener 时明确失败，不自动复用或终止。完整决策、数据可移植性和未来 README/Release 结构见
+[PLATFORM_DISTRIBUTION.md](PLATFORM_DISTRIBUTION.md)。
+
+2026-08-28 只读盘点确认本机 WSL2/systemd/Windows 互操作和 WebView2 Runtime 可用。经用户明确
+批准，微软官方 .NET SDK 10.0.400 x64 已便携安装到 `D:\Apps\dotnet`（实测 769.7 MiB），相关
+CLI/NuGet 缓存固定到 D 盘，完整卸载教程保存在 SDK 根目录；没有安装 Visual Studio 或额外 workload。
+WebView2 SDK 1.0.4191.47 已锁定，Windows Debug/Release 均 0 warning / 0 error。离线测试及真实
+Windows -> WSL fixture 验证覆盖明确 shutdown、宿主 EOF、SIGTERM、拒绝 SIGTERM 后的精确组强杀、
+端口冲突不误杀、supervisor 崩溃 parent-death 清理、WebView2 加载、单实例激活和窗口关闭释放端口。
+非交互 WSL 不保证发现 `conda`，因此宿主要求安装/配置层显式提供已验证的 Conda 可执行绝对路径。
+
+当前机器已生成约 119 MiB 的 self-contained win-x64 宿主并安装到 `D:\Apps\ResearchMate`。透明
+源码向导以 `Check -> Plan -> Apply` 分离只读依赖检查、可审计 JSON 计划与显式安装，覆盖 WSL、
+源码、supervisor、Conda/Python、Node/npm、Vue 构建、WebView2、.NET 构建边界及可选 Tesseract；
+Apply 严格按已审查计划重检。安装器分阶段切换并回滚宿主与配置，只创建一个不含个人路径参数的
+桌面快捷方式、独立 `desktop-config.json` 和当前用户卸载项；所有权清单及卸载器永不删除 WSL、
+工具链、源码、工作区、资产或归档。用户已亲自确认 fixture 窗口显示并关闭后端；为遵守禁止读取
+`src/data` 的边界，没有自动启动正式工作区。它仍是依赖用户自行准备 WSL checkout/工具链的
+source-backed 安装，不是陌生机器的一键正式发行版；品牌图标、预编译 GitHub Release、基础依赖
+官方入口整合和纯净虚拟机验收仍待后续。
+
 ## M11 之后的建议顺序
 
 1. M5-I1/M9-I1：取得脱敏旧工作区与招聘描述样本后验证，不用合成数据伪装完成。
 2. M17 候选：在行动专题内由用户明确选择有序证据并确认发送范围，生成一次新的可审计“行动简报”；结果必须逐条引用输入资料 ID，成功与失败保留历史，不覆盖用户笔记、下一步或来源事实，只有用户明确采纳后才进入独立确认层。
-3. M8-P1：先测首屏与路由加载，再决定是否拆包；不为消除构建警告而重构。
-4. 新具名来源只在出现明确用户价值后立项，每个来源单独完成限制、provenance 和离线 fixture。
+3. Windows + WSL 正式交付：在 M17 后基于透明源码向导补品牌图标、预编译 GitHub Release、基础依赖官方入口整合和纯净虚拟机验收，不扩张到三端全家桶。
+4. M8-P1：先测首屏与路由加载，再决定是否拆包；不为消除构建警告而重构。
+5. 新具名来源只在出现明确用户价值后立项，每个来源单独完成限制、provenance 和离线 fixture。
 
 ## 新会话交接
 
 先看上方已完成事实与下一最小切片，不要从头重做已完成代码。开始前完整阅读 `PRODUCT.md`、`ARCHITECTURE.md` 和本文件，运行 `git status --short` 并保留全部未提交修改。禁止读取 `src/backend/config.yaml`、真实 Key 或调用真实模型/网络；自动测试只用临时工作区和假 provider。
 
-M16 与之前的 M11–M15、M6-I1 均已完成。M5-I1/M9-I1 需要脱敏真实输入，未取得前不要伪造完成；若样本仍不可用，下一产品切片优先定义 M17 的显式、可审计行动简报，并先追踪现有 action project 与通用/论文 AI 审计边界，避免另造不兼容生命周期。不要重做 M11–M16 或既有浏览器闭环。
+M16 与之前的 M11–M15、M6-I1 均已完成。M5-I1/M9-I1 需要脱敏真实输入，未取得前不要伪造完成。Windows + WSL 单窗口宿主的有界技术验证和本机 source-backed 安装均已完成；不要重复原型，也不要把它误写成陌生机器的一键正式发布。下一产品切片回到 M17 的显式、可审计行动简报；开始时仍须先追踪 action project 与通用/论文 AI 审计边界，避免另造不兼容生命周期。不要重做 M11–M16 或既有浏览器闭环。
