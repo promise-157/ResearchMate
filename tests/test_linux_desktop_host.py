@@ -54,6 +54,21 @@ class LinuxDesktopHostTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 HOST.load_config(path)
 
+    def test_runtime_installation_info_is_forwarded_to_supervisor(self):
+        config = {
+            "project_path": "/fixture/project",
+            "conda_executable": "/fixture/conda",
+            "conda_environment": "fixture",
+            "port": 8125,
+        }
+        payload = HOST.runtime_installation_info(config, Path("/fixture/config.json"))
+        config["_runtime_info"] = payload
+        command = HOST.supervisor_command(config, "c" * 32)
+        index = command.index("--runtime-info-json")
+        forwarded = json.loads(command[index + 1])
+        self.assertEqual(forwarded["platform"], "linux_desktop")
+        self.assertEqual(forwarded["uninstall"]["guide_path"].split("/")[-1], "uninstall_researchmate.py")
+
     def test_fixture_supervisor_path_is_an_argument_not_shell_text(self):
         config = {
             "conda_executable": "/fixture/conda",

@@ -30,6 +30,16 @@ class PortLauncherTests(unittest.TestCase):
             with self.assertRaisesRegex(launcher.PortPermissionError, "无权检查"):
                 launcher.check_port("127.0.0.1", 8000)
 
+    def test_port_check_matches_server_restart_reuse_semantics(self):
+        fake_socket = MagicMock()
+        with patch("run.socket.socket", return_value=fake_socket):
+            self.assertTrue(launcher.check_port("127.0.0.1", 8000))
+        fake_socket.__enter__.return_value.setsockopt.assert_called_once_with(
+            launcher.socket.SOL_SOCKET,
+            launcher.socket.SO_REUSEADDR,
+            1,
+        )
+
     def test_linux_listener_is_terminated_and_verified(self):
         with patch("run._linux_listener_pids", return_value={123}), \
              patch("run._terminate_linux_pids", return_value=[]), \

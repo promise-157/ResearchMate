@@ -26,8 +26,24 @@ internal static class Program
         using var singleInstance = new SingleInstanceCoordinator(options);
         if (!singleInstance.IsPrimary)
         {
-            singleInstance.SendActivationAsync().GetAwaiter().GetResult();
-            return;
+            var activated = false;
+            for (var attempt = 0; attempt < 12 && !singleInstance.IsPrimary; attempt++)
+            {
+                activated = singleInstance.SendActivationAsync().GetAwaiter().GetResult();
+                if (activated)
+                {
+                    return;
+                }
+                if (singleInstance.TryAcquirePrimary(TimeSpan.Zero))
+                {
+                    break;
+                }
+                Thread.Sleep(100);
+            }
+            if (!singleInstance.IsPrimary)
+            {
+                return;
+            }
         }
 
         using var log = new LocalLog();

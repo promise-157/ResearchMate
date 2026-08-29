@@ -8,7 +8,7 @@ internal sealed class SingleInstanceCoordinator : IDisposable
 {
     private readonly Mutex _mutex;
     private readonly string _pipeName;
-    private readonly bool _ownsMutex;
+    private bool _ownsMutex;
     private readonly CancellationTokenSource _cancellation = new();
 
     public bool IsPrimary => _ownsMutex;
@@ -21,16 +21,17 @@ internal sealed class SingleInstanceCoordinator : IDisposable
         _mutex = new Mutex(true, $"Local\\{_pipeName}", out _ownsMutex);
     }
 
-    public async Task SendActivationAsync()
+    public async Task<bool> SendActivationAsync()
     {
         try
         {
             await using var client = new NamedPipeClientStream(
                 ".", _pipeName, PipeDirection.Out, PipeOptions.Asynchronous);
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(2));
+            using var timeout = new CancellationTokenSource(TimeSpan.FromMilliseconds(250));
             await client.ConnectAsync(timeout.Token);
             await using var writer = new StreamWriter(client, Encoding.UTF8) { AutoFlush = true };
             await writer.WriteLineAsync("activate");
+            return true;
         }
         catch (IOException)
         {
@@ -38,8 +39,26 @@ internal sealed class SingleInstanceCoordinator : IDisposable
         }
         catch (OperationCanceledException)
         {
-            // Do not create a second backend if activation times out.
+            // The primary may be exiting or may not have created its pipe yet.
         }
+        return false;
+    }
+
+    public bool TryAcquirePrimary(TimeSpan timeout)
+    {
+        if (_ownsMutex)
+        {
+            return true;
+        }
+        try
+        {
+            _ownsMutex = _mutex.WaitOne(timeout);
+        }
+        catch (AbandonedMutexException)
+        {
+            _ownsMutex = true;
+        }
+        return _ownsMutex;
     }
 
     public async Task ListenAsync(Action activate)
@@ -75,11 +94,11 @@ internal sealed class SingleInstanceCoordinator : IDisposable
     public void Dispose()
     {
         _cancellation.Cancel();
-        _cancellation.Dispose();
         if (_ownsMutex)
         {
             _mutex.ReleaseMutex();
         }
         _mutex.Dispose();
+        _cancellation.Dispose();
     }
 }

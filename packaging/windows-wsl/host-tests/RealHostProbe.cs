@@ -52,6 +52,16 @@ internal static class RealHostProbe
             Ensure(await WslPathExistsAsync(distro, marker),
                 "Primary window close did not deliver SIGTERM to its backend");
             Ensure(!await PortIsHealthyAsync(port), "Primary backend remains after window close");
+
+            using var restarted = StartHost(
+                distro, projectPath, condaExecutable, port, autoCloseSeconds: 6);
+            await WaitForHealthAsync(port, restarted);
+            using (var restartedTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(12)))
+            {
+                await restarted.WaitForExitAsync(restartedTimeout.Token);
+            }
+            Ensure(restarted.ExitCode == 0, "Desktop host did not restart after primary close");
+            Ensure(!await PortIsHealthyAsync(port), "Restarted backend remains after window close");
         }
         finally
         {

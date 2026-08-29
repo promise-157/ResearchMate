@@ -146,7 +146,12 @@ try {
     $link.TargetPath = $hostExe
     $link.Arguments = ""
     $link.WorkingDirectory = $InstallDirectory
-    $link.IconLocation = "$hostExe,0"
+    $customIcon = Join-Path $localState "shortcut-icon.ico"
+    $link.IconLocation = if (Test-Path -LiteralPath $customIcon -PathType Leaf) {
+        "$customIcon,0"
+    } else {
+        "$hostExe,0"
+    }
     $link.Description = "ResearchMate Windows + WSL"
     $link.Save()
     $shortcutWritten = $true

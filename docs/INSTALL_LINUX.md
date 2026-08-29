@@ -52,6 +52,9 @@ python3 packaging/linux/setup_researchmate.py --mode apply
 安装采用 staging/previous 切换，并在后半段失败时恢复旧宿主、配置、命令和应用入口。安装清单位于
 宿主目录。卸载前先关闭窗口，再运行安装目录中的：
 
+运行后也可在 `设置 -> 安装与卸载` 查看当前 XDG 宿主、配置、日志、应用入口、源码、用户数据边界
+和卸载脚本位置。
+
 ```bash
 python3 uninstall_researchmate.py
 ```

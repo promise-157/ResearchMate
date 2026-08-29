@@ -18,6 +18,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--instance-id", required=True)
     parser.add_argument("--port", type=int, required=True)
+    parser.add_argument("--runtime-info-json")
     parser.add_argument(
         "--marker", default="/tmp/researchmate-desktop-host-fixture.marker"
     )
@@ -40,6 +41,7 @@ def main():
         port=args.port,
         graceful_timeout=args.graceful_timeout,
         backend_command=command,
+        runtime_info_json=args.runtime_info_json,
     ).run()
 
 

@@ -26,6 +26,18 @@
 
 最新已验证基线（Windows + WSL 与原生 Linux source-backed 桌面，2026-08-28）：后端/桌面 143 项通过（受限沙箱内 1 项 Unix socket skip，沙箱外同项单独通过），`compileall`、Ruff、前端 lint/生产构建、Windows Debug/Release 构建、宿主离线契约及 PowerShell 5.1 语法通过。Windows + WSL 的真实生命周期、可见 fixture、自包含发布、透明计划安装和无参数快捷方式保持通过。Linux 的全依赖检查、JSON 计划、含空格自定义 XDG 安装/配置/完整卸载、用户级真实安装、单实例 socket、WSLg/X11 fixture 退出、端口释放及无进程/socket 残留通过；fixture 页面内容仍待用户目视确认。两端均未在陌生纯净目标机从零验收，不能写成一键正式发行版。桌面探针只使用临时假后端和本机健康检查，不读取 `src/data/`，不调用真实 AI、真实来源或真实 Key。M16 的 Playwright 16 项基线与 M13 经授权的四次受控公开请求事实保持不变。生产构建仍有 M8-P1 的大 chunk 和第三方 PURE 注释提示。
 
+2026-08-29 桌面交付加固：设置页通过当前宿主私有传递的有界运行信息，只读显示 Windows + WSL、
+原生 Linux 或源码模式的实际安装/配置/日志/入口/用户数据边界与卸载文档，不写 SQLite 或执行卸载。
+Windows 第二次启动不再因旧实例退出时 named-pipe 激活竞态而静默结束；离线 mutex 接管契约、宿主
+构建、设置页 Playwright，以及完整真实 Windows fixture 窗口关闭、同端口重启和再次关闭后的端口
+释放均已通过。当前后端/桌面全量为 149 项通过（受限沙箱内 1 项 Unix socket skip）。
+Windows + WSL 安装器另提供无秘密、Git 忽略的本机 JSON 配置；一次 `Install` 调用仍强制执行检查、
+落盘并显示计划后才应用，使首次安装和后续宿主更新复用同一条 Windows PowerShell 命令。
+用户现场日志进一步定位固定 8000 端口立即重启时，源码 launcher 与 supervisor 的 socket 复用规则
+不一致；两者现已统一，避免把已退出宿主留下的 `TIME_WAIT` 连接误报为未知 listener。
+Windows 宿主现嵌入仓库默认 ICO，并仅在本机 WebView origin 内允许用户显式选择最大 5 MiB 的有效
+ICO；自定义副本属于应用本地状态、重装保留、可恢复默认，普通浏览器无 Windows 文件修改能力。
+
 ## 已完成：M11 统一论文 AI、资料 AI 与聊天
 
 M11 不合并不同生命周期的数据表。通用资料 AI 使用 `extraction_runs`，持久聊天使用 `chat_sessions/chat_turns`，论文分析与后续综述使用 schema v10 的 `paper_ai_runs` 并以 `run_kind` 区分。

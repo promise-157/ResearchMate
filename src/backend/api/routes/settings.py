@@ -12,6 +12,7 @@ from config import (
 )
 from processors.ai_provider import AIProviderError
 from services.ai_settings import test_ai_connection
+from services.runtime_info import get_runtime_info
 
 router = APIRouter()
 
@@ -59,6 +60,7 @@ def get_settings():
             "request_interval": config_get("crawler", "request_interval"),
             "timeout": config_get("crawler", "timeout"),
         },
+        "runtime": get_runtime_info(),
     }
 
 

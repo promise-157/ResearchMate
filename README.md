@@ -1,328 +1,151 @@
-# ResearchMate
+<a id="readme-top"></a>
 
-ResearchMate 是一个运行在本机的个人资料工作空间，支持文字、图片、公开网页候选、论文、Debug、
-求职资料、本地 OCR、可审计 AI 分析、行动专题和完整工作区归档。
+<div align="center">
+  <a href="https://github.com/promise-157/ResearchMate">
+    <img src="assets/branding/promise-157-logo.jpg" alt="promise-157 rabbit logo" width="112" height="112">
+  </a>
 
-下面是 **Windows + WSL 2 新电脑从零安装**的完整流程。按顺序复制执行即可。命令标题会明确说明
-是在 Windows PowerShell 还是 WSL/Ubuntu 中执行。
+  <h1>ResearchMate</h1>
 
-> 当前可用桌面版在 `development` 分支。克隆时必须指定该分支。
+  <p>
+    本地优先、证据可追溯的个人资料工作空间
+    <br />
+    从导入与发现，到整理、显式 AI 分析，再到行动专题。
+  </p>
 
-## 从零安装 Windows + WSL 桌面版
+  <p>
+    <a href="docs/INSTALL_WINDOWS_WSL_FROM_SCRATCH.md"><strong>从零安装 »</strong></a>
+    ·
+    <a href="docs/MANUAL.md">使用手册</a>
+    ·
+    <a href="docs/ROADMAP.md">路线图</a>
+    ·
+    <a href="https://github.com/promise-157/ResearchMate/issues">反馈问题</a>
+  </p>
 
-### 1. Windows PowerShell：安装 WSL 2 和 Ubuntu
+  <p>
+    <img alt="Development branch" src="https://img.shields.io/badge/status-development-f59e0b?style=flat-square">
+    <img alt="Python 3.11" src="https://img.shields.io/badge/Python-3.11-3776AB?style=flat-square&logo=python&logoColor=white">
+    <img alt="Vue 3" src="https://img.shields.io/badge/Vue-3-4FC08D?style=flat-square&logo=vuedotjs&logoColor=white">
+    <img alt="License: Unlicense" src="https://img.shields.io/badge/license-Unlicense-blue?style=flat-square">
+  </p>
+</div>
 
-以管理员身份打开 Windows PowerShell：
+> [!IMPORTANT]
+> 当前可用桌面版位于 `development` 分支，尚未提供面向陌生电脑的一键二进制发行包。
+> 安装过程透明展示依赖、路径、计划与卸载边界。
 
-```powershell
-wsl --install -d Ubuntu-24.04
+<details>
+  <summary>目录</summary>
+
+- [为什么是 ResearchMate](#为什么是-researchmate)
+- [核心能力](#核心能力)
+- [运行方式](#运行方式)
+- [快速开始](#快速开始)
+- [数据与 AI 边界](#数据与-ai-边界)
+- [技术栈](#技术栈)
+- [项目状态](#项目状态)
+- [文档](#文档)
+- [参与与许可](#参与与许可)
+
+</details>
+
+## 为什么是 ResearchMate
+
+ResearchMate 不是只面向论文的聊天壳，也不是自动把整个工作区发送给模型的采集器。它把文字、图片、
+公开 URL 候选、论文、Debug 记录和求职资料统一为可追溯资料，同时保留各领域自己的结构化视图。
+
+```text
+导入 / 发现 → 候选确认 → 最小提取 → 整理关联 → 显式 AI → 行动专题
 ```
 
-如果提示 WSL 或 Ubuntu 已安装，可以直接继续。新安装后按提示重启 Windows，打开 Ubuntu，创建
-Linux 用户名和密码。然后在 PowerShell 确认 Ubuntu 的 `VERSION` 是 `2`：
+确定性本地处理不依赖 AI；外部 AI 只在用户主动触发并确认发送范围后调用。来源事实、提取结果、AI
+建议和用户确认分别保存，不用一次生成覆盖原始资料。
 
-```powershell
-wsl --list --verbose
-```
+## 核心能力
 
-### 2. WSL/Ubuntu：安装 Git、curl 和证书
+- 统一管理文本、图片、公开网页候选、论文、Debug 与求职资料。
+- 工作区隔离、完整归档往返、图片资产校验和本地中英文 OCR。
+- 论文聊天、单篇/批量分析、工作区综述与通用资料分析均保留持久审计运行。
+- 显式选择 1–20 条有序证据建立行动专题，保存目标、笔记、下一步和状态。
+- AI 成功与失败历史可见；结构化结果受输入 ID 和字段范围约束。
+- Windows + WSL 桌面窗口关闭时结束其启动的后端，可立即重新打开。
 
-打开 Ubuntu 终端：
+## 运行方式
+
+| 方式 | 适合谁 | 启动体验 | 完整说明 |
+| --- | --- | --- | --- |
+| Windows + WSL 桌面 | 主要推荐路径 | 双击一个快捷方式，关窗即停 | [纯净机从零安装](docs/INSTALL_WINDOWS_WSL_FROM_SCRATCH.md) |
+| WSL / Linux 浏览器 | 不需要桌面宿主 | 终端启动，浏览器访问 `127.0.0.1:8000` | [快速上手](docs/QUICKSTART.md) |
+| 原生 Linux 桌面 | GTK/WebKitGTK 环境 | 应用菜单或 `researchmate` 命令 | [原生 Linux 安装](docs/INSTALL_LINUX.md) |
+
+原生 Windows 后端当前没有发布；Windows 桌面版仍由 WSL 承载源码、Python 环境和工作区。
+
+## 快速开始
+
+已有 WSL、Git 和 Conda 时，先取得当前开发分支：
 
 ```bash
-sudo apt update
-sudo apt install -y git curl ca-certificates
-```
-
-### 3. WSL/Ubuntu：安装 Miniconda
-
-下面把 Miniconda 安装到当前 Linux 用户的 `~/miniconda3`，不会装到 Windows C 盘目录：
-
-```bash
-cd /tmp
-curl -fsSLo miniconda.sh https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh
-bash miniconda.sh -b -p "$HOME/miniconda3"
-"$HOME/miniconda3/bin/conda" init bash
-source "$HOME/.bashrc"
-conda --version
-```
-
-最后一条能显示 Conda 版本即可。ARM64 电脑需要把下载地址中的 `Linux-x86_64` 换成
-`Linux-aarch64`。
-
-### 4. WSL/Ubuntu：克隆 development 分支
-
-```bash
-cd "$HOME"
 git clone --branch development --single-branch https://github.com/promise-157/ResearchMate.git
 cd ResearchMate
-git branch --show-current
 ```
 
-最后一条必须输出：
+如果是纯净 WSL，或不确定 Miniconda、Python、Node、Vue、.NET、WebView2 应该如何安装，请不要猜：
+[Windows + WSL 从零安装](docs/INSTALL_WINDOWS_WSL_FROM_SCRATCH.md) 保留了逐条可复制的完整命令、
+Conda ToS 规避、PowerShell PATH 排障、安装位置、更新和彻底卸载说明。
 
-```text
-development
-```
-
-### 5. WSL/Ubuntu：创建 Python、Node 和 npm 环境
-
-这一条会创建名为 `researchmate` 的独立环境，并安装 Python 3.11、Node.js 20 和 npm：
+只使用浏览器且依赖已经准备完成时：
 
 ```bash
-conda create -n researchmate --override-channels -c conda-forge python=3.11 nodejs=20 pip -y
-```
-
-这里必须保留 `--override-channels`。新版 Miniconda 的默认 Anaconda channels 可能要求先接受 ToS；
-ResearchMate 创建环境只使用 `conda-forge`，因此不需要接受或使用 `pkgs/main`、`pkgs/r`。
-
-确认版本：
-
-```bash
-conda run -n researchmate python --version
-conda run -n researchmate node --version
-conda run -n researchmate npm --version
-```
-
-### 6. WSL/Ubuntu：安装 ResearchMate 后端依赖
-
-确保当前目录仍是 `~/ResearchMate`：
-
-```bash
-cd "$HOME/ResearchMate"
-conda run -n researchmate python -m pip install -r src/backend/requirements.txt
-```
-
-### 7. WSL/Ubuntu：安装 Vue 等前端依赖并构建页面
-
-不需要单独或全局安装 Vue。`npm ci` 会按照仓库的锁文件安装 Vue、Vite、Element Plus 等全部前端
-依赖，随后生成生产页面：
-
-```bash
-cd "$HOME/ResearchMate"
-conda run -n researchmate npm --prefix src/frontend ci
-conda run -n researchmate npm --prefix src/frontend run build
-```
-
-确认构建文件存在：
-
-```bash
-test -f src/frontend/dist/index.html && echo "frontend build: OK"
-```
-
-### 8. WSL/Ubuntu：启动一次，确认核心程序可用
-
-```bash
-cd "$HOME/ResearchMate"
 conda run -n researchmate python src/backend/run.py --no-browser
 ```
 
-在 Windows 浏览器打开：
+然后访问 <http://127.0.0.1:8000>，回到终端按 `Ctrl+C` 关闭。
 
-```text
-http://127.0.0.1:8000
-```
+Windows + WSL 桌面安装完成后，日常只需双击快捷方式。以后路径不变，更新宿主始终复用本机 JSON，
+在 **Windows PowerShell** 执行同一条 `-Mode Install -ConfigPath ... -Yes` 命令；准确命令见从零安装
+文档。设置页会显示当前机器的实际安装、日志、工作区边界和卸载文档，也可更换桌面快捷方式 ICO。
 
-看到 ResearchMate 页面后，回到 Ubuntu 终端按 `Ctrl+C` 关闭。
+## 数据与 AI 边界
 
-### 9. 可选：WSL/Ubuntu 安装中英文 OCR
+- 默认本机工作，不自动下载论文 PDF，也不镜像远程站点。
+- 前端只访问 `/api/*`；来源与 AI provider 请求留在后端。
+- Key 默认仅保存在当前后端进程；持久化便利模式会明确提示明文风险和位置。
+- 每次外部 AI 调用都需要明确动作，并展示或限制实际发送范围。
+- 卸载桌面宿主不会删除 WSL、Conda、源码、工作区、资产、归档或 Key。
 
-不需要识别图片文字可以跳过这一节。需要 OCR 时执行：
+AI 不是安装前提；没有 Key 时，本地导入、整理、模板提取、OCR 和搜索仍可工作。
 
-```bash
-sudo apt update
-sudo apt install -y tesseract-ocr tesseract-ocr-eng tesseract-ocr-chi-sim
-tesseract --list-langs
-```
+## 技术栈
 
-输出中应包含 `eng` 和 `chi_sim`。
+- Backend：Python 3.11、FastAPI、SQLite
+- Frontend：Vue 3、Vite、Element Plus
+- Windows desktop：.NET、WinForms、WebView2、WSL 2
+- Linux desktop：GTK 3、WebKitGTK
+- Verification：unittest、Ruff、Playwright、离线 fake provider
 
-### 10. Windows PowerShell：安装桌面窗口构建依赖
+## 项目状态
 
-普通权限打开 Windows PowerShell，安装 .NET 10 SDK 和 WebView2 Runtime：
+当前是持续开发中的 source-backed 版本。M11–M16 与 M6-I1 已完成；下一产品切片是行动专题内显式、
+可审计的行动简报。旧工作区迁移和真实招聘描述覆盖仍等待脱敏样本，不使用合成数据伪装完成。
 
-```powershell
-winget install --exact --id Microsoft.DotNet.SDK.10
-winget install --exact --id Microsoft.EdgeWebView2Runtime
-```
+已知限制包括：尚未在陌生纯净机器完成正式发行验收、原生 Windows 后端延期、前端主 chunk 仍偏大。
+详见 [ROADMAP](docs/ROADMAP.md) 与 [CHANGELOG](CHANGELOG.md)。
 
-如果提示已经安装，直接继续。关闭并重新打开 PowerShell，确认 .NET：
+## 文档
 
-```powershell
-dotnet --version
-```
-
-版本应以 `10.` 开头。Windows 11 通常已经带有 WebView2 Runtime，重复执行上面的 `winget install`
-只会提示已安装。
-
-### 11. WSL/Ubuntu：构建 Windows 窗口并创建桌面快捷方式
-
-回到 Ubuntu 终端，先确认当前环境确实是 Microsoft WSL，且 Windows C 盘已挂载：
-
-```bash
-uname -r
-test -d /mnt/c && echo "Windows drive: OK"
-test -x /mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe && echo "Windows PowerShell interop: OK"
-```
-
-第一条应包含 `microsoft` 或 `WSL`，后两条应输出 `OK`。README 不依赖 `powershell.exe` 是否被加入
-WSL 的 `PATH`，后续始终使用它的 Windows 标准绝对路径。
-
-如果 `/mnt/c` 或 PowerShell 文件不存在，先在独立的 **Windows PowerShell** 窗口执行：
-
-```powershell
-wsl --shutdown
-```
-
-重新打开 Ubuntu，再运行上面三条检查。如果仍失败，执行 `cat /etc/wsl.conf` 检查是否人为关闭了
-`automount` 或 `interop`；不要继续执行桌面安装。原生 Linux 本来就没有 Windows `powershell.exe`，
-应改走本文的“原生 Linux”章节。
-
-检查通过后，在 Ubuntu 中回到仓库：
-
-```bash
-cd "$HOME/ResearchMate"
-```
-
-先检查刚才安装的所有环境：
-
-```bash
-/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(wslpath -w packaging/windows-wsl/setup/Setup-ResearchMate.ps1)" -Mode Check
-```
-
-检查全部通过后生成安装计划：
-
-```bash
-/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(wslpath -w packaging/windows-wsl/setup/Setup-ResearchMate.ps1)" -Mode Plan
-```
-
-查看计划中的 WSL 发行版、项目路径、Conda 路径、端口和 Windows 安装目录：
-
-```bash
-sed -n '1,240p' researchmate-install-plan.json
-```
-
-确认正确后安装：
-
-```bash
-/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(wslpath -w packaging/windows-wsl/setup/Setup-ResearchMate.ps1)" -Mode Apply
-```
-
-安装完成后，Windows 桌面会出现唯一的 `ResearchMate` 快捷方式。双击打开窗口；关闭窗口会同时停止
-它启动的 WSL 后端，不需要再点一次“退出”，也不会关闭整个 WSL。
-
-## 以后怎么启动
-
-正常使用只需双击 Windows 桌面的 `ResearchMate`。
-
-如果只想用浏览器模式：
-
-```bash
-cd "$HOME/ResearchMate"
-conda run -n researchmate python src/backend/run.py --no-browser
-```
-
-浏览器模式按 `Ctrl+C` 关闭。
-
-## 已经安装过部分依赖
-
-不需要全部重装，按照下面的对应关系跳过即可：
-
-| 已有内容 | 可以跳过 |
-| --- | --- |
-| 已有 WSL 2 Ubuntu | 第 1 步 |
-| 已有 Git 和 curl | 第 2 步 |
-| 已有可用的 Conda、Anaconda、Miniforge 或 Mamba | 第 3 步 |
-| 已克隆 `development` 分支 | 第 4 步 |
-| 已有 Python 3.11 的 `researchmate` 环境 | 不要重新创建；缺 Node 时只执行下面的补装命令 |
-| `src/frontend/dist/index.html` 已存在且源码未更新 | 第 7 步 |
-| 不使用图片 OCR | 第 9 步 |
-| 已有 .NET 10 SDK 或 WebView2 | 第 10 步中对应的命令 |
-| 已有正常工作的桌面快捷方式且宿主源码未更新 | 第 11 步 |
-
-已有 `researchmate` 环境但缺少 Node/npm，只补装 Node：
-
-```bash
-conda install -n researchmate --override-channels -c conda-forge nodejs=20 -y
-```
-
-已有其他 Conda 安装位置时，第 11 步如果没有自动识别，可明确指定。例如：
-
-```bash
-cd /你的/ResearchMate/绝对路径
-/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe -NoProfile -ExecutionPolicy Bypass -File "$(wslpath -w packaging/windows-wsl/setup/Setup-ResearchMate.ps1)" -Mode Check -Distro '你的WSL发行版名称' -ProjectPath '/你的/ResearchMate/绝对路径' -CondaExecutable '/你的/conda/绝对路径/condabin/conda'
-```
-
-三个实际值可以这样查看：
-
-```bash
-/mnt/c/Windows/System32/wsl.exe --list --quiet
-pwd
-conda info --base
-```
-
-## 更新
-
-关闭 ResearchMate 窗口，在 Ubuntu 的仓库目录执行：
-
-```bash
-cd "$HOME/ResearchMate"
-git status --short
-git pull --ff-only
-conda run -n researchmate python -m pip install -r src/backend/requirements.txt
-conda run -n researchmate npm --prefix src/frontend ci
-conda run -n researchmate npm --prefix src/frontend run build
-```
-
-如果前端或 Windows 宿主有更新，再执行第 11 步的 `Check → Plan → Apply`。
-
-## 卸载
-
-先关闭 ResearchMate 窗口，再打开 Windows：
-
-```text
-设置 → 应用 → 已安装的应用 → ResearchMate (Windows + WSL) → 卸载
-```
-
-陌生电脑完成第 11 步后，实际 Windows 安装目录中也会自动出现：
-
-- `uninstall-guide-zh-CN.txt`：中文彻底卸载说明；
-- `Uninstall-ResearchMate.ps1`：卸载器；
-- `installation-manifest.json`：本次安装创建的文件和外部依赖边界。
-
-默认安装目录是 `D:\Apps\ResearchMate`（电脑已有 `D:\Apps` 时），否则是
-`%LOCALAPPDATA%\Programs\ResearchMate`。卸载 ResearchMate 不会删除 WSL、Ubuntu、Miniconda、
-源码、工作区、图片资产或归档；是否继续删除这些用户所有内容由用户自己决定。详细说明见
-[Windows + WSL 安装与卸载](docs/INSTALL_WINDOWS_WSL.md)。
-
-## 原生 Linux
-
-原生 Linux 先执行上面的第 2–9 步，再安装 GTK 3、PyGObject 和 WebKitGTK。Ubuntu 20.04 实测命令：
-
-```bash
-sudo apt update
-sudo apt install -y python3-gi gir1.2-gtk-3.0 gir1.2-webkit2-4.0
-```
-
-然后按照 [原生 Linux 桌面安装](docs/INSTALL_LINUX.md) 创建应用菜单入口和 `researchmate` 命令。
-较新 Linux 发行版可能使用 WebKitGTK 4.1。原生 Windows 后端目前尚未发布。
-
-## AI 与数据安全
-
-AI 不是安装前提。页面不会自动连接服务商，每次外部调用必须由用户主动触发并确认发送范围。
-来源事实、AI 建议和用户确认分层保存；Key 默认只保留在当前进程。
-
-## 更多文档
-
-- [快速上手](docs/QUICKSTART.md)
-- [使用手册](docs/MANUAL.md)
-- [Windows + WSL 安装与卸载](docs/INSTALL_WINDOWS_WSL.md)
+- [Windows + WSL 从零安装](docs/INSTALL_WINDOWS_WSL_FROM_SCRATCH.md)
+- [Windows + WSL 安装/卸载边界](docs/INSTALL_WINDOWS_WSL.md)
 - [原生 Linux 安装](docs/INSTALL_LINUX.md)
+- [快速上手](docs/QUICKSTART.md) · [使用手册](docs/MANUAL.md)
 - [开发与验证](docs/DEVELOPMENT.md)
-- [产品规格](docs/PRODUCT.md)
-- [架构说明](docs/ARCHITECTURE.md)
-- [路线图](docs/ROADMAP.md)
+- [产品规格](docs/PRODUCT.md) · [架构说明](docs/ARCHITECTURE.md) · [路线图](docs/ROADMAP.md)
 
-## License
+## 参与与许可
 
-[The Unlicense](LICENSE.txt)
+欢迎通过 [Issues](https://github.com/promise-157/ResearchMate/issues) 报告可复现问题或讨论需求。提交改动
+前请先阅读 [开发与验证](docs/DEVELOPMENT.md)，不要在 fixture、日志或提交中包含真实 Key 和私人工作区。
+
+本项目使用 [The Unlicense](LICENSE.txt)。
+
+<p align="right"><a href="#readme-top">回到顶部</a></p>

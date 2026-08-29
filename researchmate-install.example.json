@@ -1,0 +1,10 @@
+{
+  "schema_version": 1,
+  "distro": "Ubuntu",
+  "project_path": "/home/your-linux-user/ResearchMate",
+  "conda_executable": "/home/your-linux-user/miniconda3/condabin/conda",
+  "conda_environment": "researchmate",
+  "port": 8000,
+  "install_directory": "D:\\Apps\\ResearchMate",
+  "dotnet_executable": "dotnet"
+}

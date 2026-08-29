@@ -107,6 +107,29 @@ Assert(start.RedirectStandardInput, "supervisor stdin must be owned by host");
 Assert(start.ArgumentList.Contains("/fixture/project with spaces"), "project path was not an argument");
 Assert(start.ArgumentList.Contains("/fixture/miniconda/conda"), "conda path was not an argument");
 Assert(start.ArgumentList.Contains(instanceId), "instance id was not forwarded");
+var runtimeInfoIndex = start.ArgumentList.IndexOf("--runtime-info-json");
+Assert(runtimeInfoIndex >= 0, "runtime installation info was not forwarded");
+Assert(
+    start.ArgumentList[runtimeInfoIndex + 1].Contains("windows_wsl"),
+    "runtime installation platform is missing");
+
+var identitySuffix = Guid.NewGuid().ToString("N");
+var instanceOptions = options with { ProjectPath = options.ProjectPath + identitySuffix };
+var firstCoordinator = new SingleInstanceCoordinator(instanceOptions);
+var waitingCoordinator = new SingleInstanceCoordinator(instanceOptions);
+try
+{
+    Assert(firstCoordinator.IsPrimary, "first coordinator did not own the mutex");
+    Assert(!waitingCoordinator.IsPrimary, "waiting coordinator unexpectedly owned the mutex");
+    firstCoordinator.Dispose();
+    Assert(
+        waitingCoordinator.TryAcquirePrimary(TimeSpan.FromSeconds(1)),
+        "waiting coordinator did not take ownership after the first instance exited");
+}
+finally
+{
+    waitingCoordinator.Dispose();
+}
 
 var fixtureOptions = HostOptions.Parse(new[]
 {
@@ -140,5 +163,30 @@ var parsedEvent = RuntimeEvent.Parse(
 Assert(parsedEvent?.Event == "backend_spawned", "runtime event parsing failed");
 Assert(parsedEvent?.ProcessGroupId == 4321, "runtime process group parsing failed");
 Assert(RuntimeEvent.Parse("not-json") is null, "invalid protocol JSON was accepted");
+
+var iconFixture = Path.Combine(Path.GetTempPath(), $"researchmate-icon-{Guid.NewGuid():N}.ico");
+try
+{
+    File.WriteAllBytes(iconFixture, new byte[]
+    {
+        0, 0, 1, 0, 1, 0,
+        16, 16, 0, 0, 1, 0, 32, 0, 4, 0, 0, 0, 22, 0, 0, 0,
+        0, 0, 0, 0,
+    });
+    ShortcutIconManager.ValidateIcon(iconFixture);
+    File.WriteAllBytes(iconFixture, new byte[] { 0, 0, 2, 0, 1, 0 });
+    try
+    {
+        ShortcutIconManager.ValidateIcon(iconFixture);
+        throw new InvalidOperationException("invalid ICO header was accepted");
+    }
+    catch (InvalidDataException)
+    {
+    }
+}
+finally
+{
+    File.Delete(iconFixture);
+}
 
 Console.WriteLine("Windows WSL host offline contract tests passed.");

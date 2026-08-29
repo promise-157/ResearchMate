@@ -1,5 +1,6 @@
 param(
-    [ValidateSet("Check", "Plan", "Apply")][string]$Mode = "Check",
+    [ValidateSet("Check", "Plan", "Apply", "Install")][string]$Mode = "Check",
+    [string]$ConfigPath = "",
     [string]$PlanPath = "",
     [string]$Distro = "",
     [string]$ProjectPath = "",
@@ -9,7 +10,8 @@ param(
     [string]$InstallDirectory = "",
     [string]$PublishedHostDirectory = "",
     [string]$DotNetExecutable = "dotnet",
-    [switch]$NonInteractive
+    [switch]$NonInteractive,
+    [switch]$Yes
 )
 
 $ErrorActionPreference = "Stop"
@@ -59,6 +61,27 @@ function Invoke-Wsl([string[]]$Arguments) {
     finally {
         $ErrorActionPreference = $previousPreference
     }
+}
+
+function Import-InstallConfig([string]$Path) {
+    if (-not $Path) { throw "Install mode requires -ConfigPath" }
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) {
+        throw "Install config not found: $Path"
+    }
+    $config = Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json
+    $allowed = @(
+        "schema_version", "distro", "project_path", "conda_executable",
+        "conda_environment", "port", "install_directory",
+        "published_host_directory", "dotnet_executable"
+    )
+    foreach ($property in $config.PSObject.Properties.Name) {
+        if ($allowed -notcontains $property) { throw "Unknown install config field: $property" }
+    }
+    if ([int]$config.schema_version -ne 1) { throw "Unsupported install config version" }
+    foreach ($required in @("distro", "project_path", "conda_executable")) {
+        if (-not [string]$config.$required) { throw "Install config field is required: $required" }
+    }
+    return $config
 }
 
 function Resolve-RepositoryDefaults {
@@ -218,6 +241,19 @@ function Show-Checks($Checks) {
     }
 }
 
+if ($Mode -eq "Install") {
+    $installConfig = Import-InstallConfig $ConfigPath
+    $Distro = [string]$installConfig.distro
+    $ProjectPath = [string]$installConfig.project_path
+    $CondaExecutable = [string]$installConfig.conda_executable
+    if ($installConfig.conda_environment) { $CondaEnvironment = [string]$installConfig.conda_environment }
+    if ($installConfig.port) { $Port = [int]$installConfig.port }
+    if ($installConfig.install_directory) { $InstallDirectory = [string]$installConfig.install_directory }
+    if ($installConfig.published_host_directory) { $PublishedHostDirectory = [string]$installConfig.published_host_directory }
+    if ($installConfig.dotnet_executable) { $DotNetExecutable = [string]$installConfig.dotnet_executable }
+    $NonInteractive = $true
+}
+
 $defaults = Resolve-RepositoryDefaults
 $selectedDistro = [string]$defaults[0]
 $selectedProject = [string]$defaults[1]
@@ -279,11 +315,21 @@ $plan = [ordered]@{
     checks = $checks
 }
 
-if ($Mode -eq "Plan") {
+if ($Mode -eq "Plan" -or $Mode -eq "Install") {
     $plan | ConvertTo-Json -Depth 8 | Set-Content -LiteralPath $PlanPath -Encoding UTF8
     Write-Output "Plan written: $PlanPath"
     if ($requiredFailures.Count) { exit 2 }
-    exit 0
+    if ($Mode -eq "Plan") { exit 0 }
+    Write-Output "Planned installation:"
+    $plan | ConvertTo-Json -Depth 8 | Write-Output
+    if (-not $Yes) {
+        $answer = Read-Host "Apply this plan now? Type YES to continue"
+        if ($answer -cne "YES") {
+            Write-Output "Cancelled; the plan was kept and no installation changes were applied."
+            exit 0
+        }
+    }
+    $approvedPlan = $plan
 }
 
 if ($requiredFailures.Count) { throw "Required checks failed; no changes were applied" }

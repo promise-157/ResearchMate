@@ -57,7 +57,7 @@ def supervisor_command(
     config: dict[str, object], instance_id: str,
     supervisor_script: str = "src/backend/desktop_runtime.py",
 ) -> list[str]:
-    return [
+    command = [
         str(config["conda_executable"]),
         "run",
         "--no-capture-output",
@@ -70,6 +70,38 @@ def supervisor_command(
         "--port",
         str(config["port"]),
     ]
+    runtime_info = config.get("_runtime_info")
+    if isinstance(runtime_info, str):
+        command.extend(["--runtime-info-json", runtime_info])
+    return command
+
+
+def runtime_installation_info(config: dict[str, object], config_path: Path) -> str:
+    install_directory = Path(__file__).resolve().parent
+    data_home = xdg_path("XDG_DATA_HOME", ".local/share")
+    state_home = xdg_path("XDG_STATE_HOME", ".local/state")
+    payload = {
+        "schema_version": 1,
+        "platform": "linux_desktop",
+        "platform_label": "原生 Linux 桌面",
+        "paths": [
+            {"label": "Linux 桌面宿主", "path": str(install_directory), "ownership": "application"},
+            {"label": "桌面配置", "path": str(config_path), "ownership": "application"},
+            {"label": "日志", "path": str(state_home / "researchmate"), "ownership": "application_state"},
+            {"label": "应用菜单入口", "path": str(data_home / "applications/researchmate.desktop"), "ownership": "application"},
+            {"label": "源码", "path": str(config["project_path"]), "ownership": "user"},
+            {"label": "前端依赖", "path": str(Path(str(config["project_path"])) / "src/frontend/node_modules"), "ownership": "rebuildable"},
+            {"label": "前端构建", "path": str(Path(str(config["project_path"])) / "src/frontend/dist"), "ownership": "rebuildable"},
+            {"label": "工作区与用户资产", "path": str(Path(str(config["project_path"])) / "src/data"), "ownership": "user_data"},
+            {"label": "Conda 可执行文件", "path": str(config["conda_executable"]), "ownership": "external"},
+        ],
+        "uninstall": {
+            "available": True,
+            "summary": "关闭窗口后，在宿主目录运行卸载脚本；不会删除源码、环境或工作区。",
+            "guide_path": str(install_directory / "uninstall_researchmate.py"),
+        },
+    }
+    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
 
 
 class SingleInstance:
@@ -311,6 +343,7 @@ def main() -> int:
             print("Linux desktop config is valid")
             return 0
         supervisor_script = args.test_supervisor_script or "src/backend/desktop_runtime.py"
+        config["_runtime_info"] = runtime_installation_info(config, args.config.expanduser())
         return run_window(config, supervisor_script)
     except (ValueError, RuntimeError, OSError) as error:
         print(f"ResearchMate desktop error: {error}", file=sys.stderr)

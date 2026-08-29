@@ -51,6 +51,7 @@ class DesktopRuntimeTests(unittest.TestCase):
                 process_factory=MagicMock(return_value=fake_process),
                 backend_command=["fixture-backend"],
                 graceful_timeout=0.01,
+                startup_port_timeout=0.01,
             ),
             stdout,
             fake_process,
@@ -156,6 +157,21 @@ class DesktopRuntimeTests(unittest.TestCase):
         self.assertIs(kwargs["stdout"], supervisor.stderr)
         self.assertIs(kwargs["stderr"], supervisor.stderr)
         self.assertEqual(self.events(output)[0]["event"], "backend_spawned")
+
+    def test_runtime_installation_info_is_validated_and_forwarded_only_to_backend(self):
+        payload = json.dumps({"schema_version": 1, "platform": "fixture"})
+        supervisor, _, _ = self.make_supervisor()
+        supervisor.runtime_info_json = desktop_runtime._validate_runtime_info_json(payload)
+        with patch("desktop_runtime.port_is_available", return_value=True), \
+             patch("desktop_runtime.os.getpgid", return_value=4321):
+            supervisor.start_backend()
+        environment = supervisor.process_factory.call_args.kwargs["env"]
+        self.assertEqual(
+            json.loads(environment[desktop_runtime.RUNTIME_INFO_ENV])["platform"],
+            "fixture",
+        )
+        with self.assertRaisesRegex(desktop_runtime.DesktopRuntimeError, "JSON"):
+            desktop_runtime._validate_runtime_info_json("not-json")
 
 
 if __name__ == "__main__":

@@ -5,6 +5,28 @@ test('AI connection test is explicit, confirmed and sends no workspace data', as
   let testRequests = 0
   const settingsUpdates = []
 
+  await page.addInitScript(() => {
+    const listeners = new Set()
+    const webview = {
+      addEventListener: (type, callback) => { if (type === 'message') listeners.add(callback) },
+      removeEventListener: (type, callback) => { if (type === 'message') listeners.delete(callback) },
+      postMessage: (message) => {
+        const response = message.type === 'select_shortcut_icon'
+          ? {
+              type: 'shortcut_icon_result', status: 'ok',
+              message: '快捷方式图标已更新',
+              path: 'C:\\Users\\fixture\\AppData\\Local\\ResearchMate\\shortcut-icon.ico',
+            }
+          : {
+              type: 'shortcut_icon_result', status: 'ok',
+              message: '已恢复默认图标', path: 'D:\\Apps\\ResearchMate\\ResearchMate.WindowsWslHost.exe',
+            }
+        setTimeout(() => listeners.forEach(callback => callback({ data: response })), 0)
+      },
+    }
+    Object.defineProperty(window, 'chrome', { value: { webview }, configurable: true })
+  })
+
   await page.route('http://127.0.0.1:4173/api/**', async (route) => {
     const request = route.request()
     const url = new URL(request.url())
@@ -24,6 +46,20 @@ test('AI connection test is explicit, confirmed and sends no workspace data', as
         api_base_url: 'https://api.deepseek.com', model: 'deepseek-v4-pro',
       },
       crawl: { max_papers_per_source: 50, request_interval: 2, timeout: 30 },
+      runtime: {
+        schema_version: 1,
+        platform: 'windows_wsl',
+        platform_label: 'Windows + WSL 桌面',
+        paths: [
+          { label: 'Windows 宿主安装目录', path: 'D:\\Apps\\ResearchMate', ownership: 'application' },
+          { label: 'WSL 源码', path: '/home/fixture/ResearchMate', ownership: 'user' },
+        ],
+        uninstall: {
+          available: true,
+          summary: '从 Windows 已安装的应用卸载。',
+          guide_path: 'D:\\Apps\\ResearchMate\\uninstall-guide-zh-CN.txt',
+        },
+      },
     })
     if (path === '/api/settings' && method === 'PUT') {
       const body = request.postDataJSON()
@@ -52,6 +88,17 @@ test('AI connection test is explicit, confirmed and sends no workspace data', as
   })
 
   await page.goto('/settings')
+  await page.getByRole('menuitem', { name: '安装与卸载' }).click()
+  await expect(page.getByText('当前运行方式：Windows + WSL 桌面')).toBeVisible()
+  await expect(page.getByText('D:\\Apps\\ResearchMate', { exact: true })).toBeVisible()
+  await expect(page.getByText('D:\\Apps\\ResearchMate\\uninstall-guide-zh-CN.txt')).toBeVisible()
+  await expect(page.getByText('用户所有；卸载时保留')).toBeVisible()
+  await page.getByRole('button', { name: '选择 ICO 文件' }).click()
+  await expect(page.getByText('快捷方式图标已更新')).toBeVisible()
+  await expect(page.getByText(/shortcut-icon\.ico/)).toBeVisible()
+  await page.getByRole('button', { name: '恢复默认图标' }).click()
+  await expect(page.getByText('已恢复默认图标')).toBeVisible()
+
   await page.getByText('AI 配置', { exact: true }).click()
   await expect(page.getByText(/明文写入 \/fixture\/src\/backend\/config.yaml/)).toBeVisible()
   await expect(page.getByText(/Key 已保存在 \/fixture\/src\/backend\/config.yaml/)).toBeVisible()

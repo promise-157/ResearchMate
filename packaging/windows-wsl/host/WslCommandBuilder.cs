@@ -24,6 +24,8 @@ public static class WslCommandBuilder
         startInfo.ArgumentList.Add(instanceId);
         startInfo.ArgumentList.Add("--port");
         startInfo.ArgumentList.Add(options.Port.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        startInfo.ArgumentList.Add("--runtime-info-json");
+        startInfo.ArgumentList.Add(RuntimeInstallationInfo.Build(options));
         return startInfo;
     }
 

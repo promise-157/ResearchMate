@@ -1,5 +1,6 @@
 using Microsoft.Web.WebView2.Core;
 using Microsoft.Web.WebView2.WinForms;
+using System.Text.Json;
 
 namespace ResearchMate.WindowsWslHost;
 
@@ -77,6 +78,7 @@ internal sealed class MainForm : Form
             await _webView.EnsureCoreWebView2Async(environment);
             _webView.CoreWebView2.Settings.AreDevToolsEnabled = false;
             _webView.CoreWebView2.Settings.IsStatusBarEnabled = false;
+            _webView.CoreWebView2.WebMessageReceived += OnWebMessageReceived;
             _webView.Source = _runtime.ApplicationUri;
             _status.Visible = false;
             _webView.Visible = true;
@@ -91,6 +93,66 @@ internal sealed class MainForm : Form
             _log.Write("host", $"启动失败：{error.Message}");
             ShowRuntimeFailure($"ResearchMate 启动失败\n\n{error.Message}\n\n日志：{_log.Path}");
         }
+    }
+
+    private void OnWebMessageReceived(object? sender, CoreWebView2WebMessageReceivedEventArgs eventArgs)
+    {
+        if (_runtime is null || !IsOwnedApplicationOrigin(eventArgs.Source, _runtime.ApplicationUri))
+        {
+            return;
+        }
+        try
+        {
+            using var document = JsonDocument.Parse(eventArgs.WebMessageAsJson);
+            var type = document.RootElement.GetProperty("type").GetString();
+            if (type == "select_shortcut_icon")
+            {
+                using var dialog = new OpenFileDialog
+                {
+                    Title = "选择 ResearchMate 快捷方式图标",
+                    Filter = "Windows 图标 (*.ico)|*.ico",
+                    CheckFileExists = true,
+                    Multiselect = false,
+                };
+                if (dialog.ShowDialog(this) != DialogResult.OK)
+                {
+                    PostIconResult("cancelled", "已取消选择", null);
+                    return;
+                }
+                var installedPath = ShortcutIconManager.ApplyCustomIcon(dialog.FileName);
+                PostIconResult("ok", "快捷方式图标已更新", installedPath);
+                return;
+            }
+            if (type == "reset_shortcut_icon")
+            {
+                ShortcutIconManager.RestoreDefaultIcon();
+                PostIconResult("ok", "已恢复默认图标", Application.ExecutablePath);
+            }
+        }
+        catch (Exception error)
+        {
+            _log.Write("host", $"更新快捷方式图标失败：{error.Message}");
+            PostIconResult("error", error.Message, null);
+        }
+    }
+
+    private static bool IsOwnedApplicationOrigin(string source, Uri applicationUri)
+    {
+        return Uri.TryCreate(source, UriKind.Absolute, out var sourceUri) &&
+            sourceUri.Scheme == applicationUri.Scheme &&
+            sourceUri.Host == applicationUri.Host &&
+            sourceUri.Port == applicationUri.Port;
+    }
+
+    private void PostIconResult(string status, string message, string? path)
+    {
+        _webView.CoreWebView2.PostWebMessageAsJson(JsonSerializer.Serialize(new
+        {
+            type = "shortcut_icon_result",
+            status,
+            message,
+            path,
+        }));
     }
 
     private void ShowRuntimeFailure(string message)

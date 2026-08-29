@@ -39,6 +39,11 @@ def check_port(host, port):
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
             s.settimeout(0.5)
+            # Match Uvicorn and the desktop supervisor: a recently closed
+            # owned listener may leave TCP connections in TIME_WAIT, which
+            # must not make an immediate desktop restart look like a live
+            # unknown process.
+            s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             s.bind((host, port))
             return True
     except OSError as exc:

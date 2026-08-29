@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Rebuilt the repository landing README around the owner's established rabbit logo and open-source template style, while preserving every copyable clean-machine command in a dedicated Windows + WSL from-scratch guide.
+- Added a Git-ignored Windows + WSL install configuration and one-command PowerShell `Install` flow that always checks, writes and displays a plan before applying, so later host updates do not require re-entering paths.
+- Aligned the source launcher port probe with the supervisor/server `SO_REUSEADDR` behavior so closing and immediately reopening the fixed-port Windows desktop does not mistake `TIME_WAIT` connections for a live listener.
+- Embedded the owner-supplied ResearchMate ICO in the Windows host and added an origin-checked desktop-only Settings picker for validated, persistent custom shortcut icons and explicit default restoration; the separate rabbit image is used only for the GitHub README.
+
+- Added read-only installation ownership and uninstall information to Settings for Windows + WSL, native Linux and source/browser modes. Fixed the Windows host shutdown/relaunch race by allowing a new process to acquire the mutex when activation collides with the previous instance exiting, with offline and real-host restart coverage.
 - Reorganized the repository README into a concise platform chooser and shortest-path guide, with detailed Windows + WSL, native Linux, development, verification and uninstall instructions linked as dedicated documents.
 - Reframed the product as a local-first general material assistant with paper, job, and Debug templates.
 - Added the first generic text-material vertical slice: normalized import, exact deduplication, local type suggestions, search/filter/detail, persisted status, and workspace counts.

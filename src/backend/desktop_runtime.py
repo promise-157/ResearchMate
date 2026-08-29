@@ -18,6 +18,7 @@ import socket
 import subprocess
 import sys
 import threading
+import time
 from pathlib import Path
 from typing import Any, TextIO
 
@@ -25,15 +26,32 @@ from typing import Any, TextIO
 BACKEND_DIR = Path(__file__).resolve().parent
 INSTANCE_ID_RE = re.compile(r"^[0-9a-f]{32}$")
 DEFAULT_GRACEFUL_TIMEOUT_SECONDS = 15.0
+DEFAULT_STARTUP_PORT_TIMEOUT_SECONDS = 8.0
+RUNTIME_INFO_ENV = "RESEARCHMATE_RUNTIME_INFO_JSON"
 
 
 class DesktopRuntimeError(RuntimeError):
     """A stable local lifecycle error safe to send to the desktop host."""
 
 
+def _validate_runtime_info_json(value: str | None) -> str | None:
+    if value is None:
+        return None
+    if len(value) > 32_768:
+        raise DesktopRuntimeError("桌面安装信息超过允许大小")
+    try:
+        payload = json.loads(value)
+    except json.JSONDecodeError as exc:
+        raise DesktopRuntimeError("桌面安装信息不是有效 JSON") from exc
+    if not isinstance(payload, dict) or payload.get("schema_version") != 1:
+        raise DesktopRuntimeError("桌面安装信息版本无效")
+    return json.dumps(payload, ensure_ascii=False, separators=(",", ":"))
+
+
 def port_is_available(host: str, port: int) -> bool:
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+            listener.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
             listener.bind((host, port))
         return True
     except OSError:
@@ -68,6 +86,8 @@ class DesktopRuntimeSupervisor:
         stdout: TextIO = sys.stdout,
         stderr: TextIO = sys.stderr,
         backend_command: list[str] | None = None,
+        runtime_info_json: str | None = None,
+        startup_port_timeout: float = DEFAULT_STARTUP_PORT_TIMEOUT_SECONDS,
         process_factory: Any = subprocess.Popen,
     ) -> None:
         if not INSTANCE_ID_RE.fullmatch(instance_id):
@@ -78,6 +98,8 @@ class DesktopRuntimeSupervisor:
             raise DesktopRuntimeError("桌面运行端口无效")
         if graceful_timeout <= 0:
             raise DesktopRuntimeError("优雅退出等待时间必须大于零")
+        if startup_port_timeout < 0:
+            raise DesktopRuntimeError("启动端口等待时间不能为负数")
 
         self.instance_id = instance_id
         self.host = host
@@ -87,6 +109,8 @@ class DesktopRuntimeSupervisor:
         self.stdout = stdout
         self.stderr = stderr
         self.backend_command = backend_command or _default_backend_command()
+        self.runtime_info_json = _validate_runtime_info_json(runtime_info_json)
+        self.startup_port_timeout = startup_port_timeout
         self.process_factory = process_factory
         self.process: subprocess.Popen[str] | None = None
         self.process_group_id: int | None = None
@@ -123,10 +147,18 @@ class DesktopRuntimeSupervisor:
         signal.signal(signal.SIGINT, request_shutdown)
 
     def start_backend(self) -> None:
+        deadline = time.monotonic() + self.startup_port_timeout
+        while not port_is_available(self.host, self.port) and time.monotonic() < deadline:
+            time.sleep(0.1)
         if not port_is_available(self.host, self.port):
             raise DesktopRuntimeError(
                 f"本机端口 {self.port} 已被占用；桌面宿主不会复用或终止未知进程"
             )
+        child_environment = os.environ.copy()
+        if self.runtime_info_json:
+            child_environment[RUNTIME_INFO_ENV] = self.runtime_info_json
+        else:
+            child_environment.pop(RUNTIME_INFO_ENV, None)
         self.process = self.process_factory(
             self.backend_command,
             cwd=str(BACKEND_DIR),
@@ -134,6 +166,7 @@ class DesktopRuntimeSupervisor:
             stdout=self.stderr,
             stderr=self.stderr,
             text=True,
+            env=child_environment,
             preexec_fn=_configure_child_process,
         )
         self.process_group_id = os.getpgid(self.process.pid)
@@ -220,6 +253,12 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--instance-id", required=True)
     parser.add_argument("--host", default="127.0.0.1")
     parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--runtime-info-json")
+    parser.add_argument(
+        "--startup-port-timeout",
+        type=float,
+        default=DEFAULT_STARTUP_PORT_TIMEOUT_SECONDS,
+    )
     parser.add_argument(
         "--graceful-timeout",
         type=float,
@@ -236,6 +275,8 @@ def main(argv: list[str] | None = None) -> int:
             host=args.host,
             port=args.port,
             graceful_timeout=args.graceful_timeout,
+            runtime_info_json=args.runtime_info_json,
+            startup_port_timeout=args.startup_port_timeout,
         )
     except DesktopRuntimeError as exc:
         print(str(exc), file=sys.stderr)
