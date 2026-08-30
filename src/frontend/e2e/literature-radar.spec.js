@@ -16,22 +16,23 @@ test('Crossref radar confirms bounded conditions and preserves review state offl
   const rankingRequests = []
   const briefRequests = []
   let briefs = []
+  const betaCandidate = { id: 301, job_id: 91, title: 'Radar B Same-ID Fixture', summary: '', source_kind: 'crossref_ieee', source_url: 'https://doi.org/10.1109/beta', status: 'pending', source_records: [], source_facts: { doi: '10.1109/beta', container_title: 'IEEE Access', authors: ['Beta Author'], published: '2026-08-20' } }
   await page.route('http://127.0.0.1:4173/api/**', async (route) => {
     const request = route.request(); const url = new URL(request.url()); const path = url.pathname
     const json = (value, status = 200) => route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(value) })
     if (path === '/api/workspaces') return json({ items: workspaces, active_path: activePath, active_name: activePath.includes('a.db') ? 'Radar A' : 'Radar B' })
     if (path === '/api/workspaces/load') { activePath = url.searchParams.get('db_path'); return json({ success: true }) }
     if (path === '/api/collection-jobs') return json({ jobs: activePath.includes('a.db') ? jobs : [] })
-    if (path === '/api/discovery-rules' && request.method() === 'GET') return json({ rules: activePath.includes('a.db') ? rules : [] })
-    if (path === '/api/discoveries/candidates/briefs' && request.method() === 'GET') return json({ runs: activePath.includes('a.db') ? briefs : [] })
+    if (path === '/api/discovery-rules' && request.method() === 'GET') return activePath.includes('a.db') ? json({ rules }) : json({ detail: 'fixture rules failure' }, 500)
+    if (path === '/api/discoveries/candidates/briefs' && request.method() === 'GET') return activePath.includes('a.db') ? json({ runs: briefs }) : json({ detail: 'fixture briefs failure' }, 500)
     if (path === '/api/discoveries/candidates/rank') { const body = request.postDataJSON(); rankingRequests.push(body); return json({ ranking: body.candidate_ids.map((id) => ({ candidate_id: id, score: id === 301 ? 90 : 15, reasons: id === 301 ? ['标题包含完整关注词 +45', '有可追溯摘要 +10'] : ['本工作区新发现 +15'] })) }) }
-    if (path === '/api/discoveries/candidates/briefs' && request.method() === 'POST') { const body = request.postDataJSON(); briefRequests.push(body); const run = { id: 81, status: 'succeeded', candidate_ids: body.candidate_ids, result: { overview: '优先核对 MIGHTY', priorities: [{ candidate_id: 301, reason: '证据更完整' }], caveats: '没有阅读全文' } }; briefs = [run]; return json({ ok: true, run }, 201) }
+    if (path === '/api/discoveries/candidates/briefs' && request.method() === 'POST') { const body = request.postDataJSON(); briefRequests.push(body); if (briefRequests.length > 1) { const run = { id: 82, status: 'failed', candidate_ids: body.candidate_ids, result: null, error_message: 'fixture provider failure' }; briefs = [run, ...briefs]; return json({ ok: false, run }, 201) } const run = { id: 81, status: 'succeeded', candidate_ids: body.candidate_ids, result: { overview: '优先核对 MIGHTY', priorities: [{ candidate_id: 301, reason: '证据更完整' }], caveats: '没有阅读全文' } }; briefs = [run]; return json({ ok: true, run }, 201) }
     if (path === '/api/discovery-rules' && request.method() === 'POST') { const body = request.postDataJSON(); const rule = { id: 71, name: body.name, source_kind: 'crossref_ieee', query: body.query }; rules = [rule]; return json(rule, 201) }
     if (path === '/api/discovery-rules/71/run') { const job = { id: 72, collector: 'crossref_ieee', status: 'succeeded', candidate_count: 0, query: rules[0].query, result: { empty: true } }; jobs = [job, ...jobs]; rules[0] = { ...rules[0], last_run_status: 'succeeded', last_success_at: '2026-08-30T00:00:00+00:00' }; return json({ job, candidates: [] }, 201) }
     if (path === '/api/discovery-rules/run') return json({ results: rules.map((rule) => ({ rule_id: rule.id, status: 'succeeded', candidate_count: 0 })) }, 201)
     if (path === '/api/discovery-rules/71' && request.method() === 'PUT') { const body = request.postDataJSON(); rules[0] = { ...rules[0], ...body }; return json(rules[0]) }
     if (path === '/api/discovery-rules/71' && request.method() === 'DELETE') { rules = []; return route.fulfill({ status: 204 }) }
-    if (path === '/api/candidates' && request.method() === 'GET') return json({ candidates: activePath.includes('a.db') ? candidates.filter((item) => item.status === 'pending') : [] })
+    if (path === '/api/candidates' && request.method() === 'GET') return json({ candidates: activePath.includes('a.db') ? candidates.filter((item) => item.status === 'pending') : [betaCandidate] })
     if (path === '/api/discoveries/crossref') {
       const body = request.postDataJSON(); requests.push(body)
       if (requests.length === 1) {
@@ -135,6 +136,9 @@ test('Crossref radar confirms bounded conditions and preserves review state offl
   await expect(page.getByText('优先核对 MIGHTY')).toBeVisible()
   await expect(page.getByText(/#301 证据更完整/)).toBeVisible()
   expect(briefRequests[0].candidate_ids).toEqual([301, 302])
+  await page.getByRole('button', { name: 'AI 候选简报（2）' }).click()
+  await page.getByRole('button', { name: '确认并生成简报' }).click()
+  await expect(page.getByText('fixture provider failure').first()).toBeVisible()
   await page.getByText('显示以前见过的结果（1）').click()
   const requestsBeforeContext = requests.length
   await page.getByRole('button', { name: '查首位作者' }).click()
@@ -183,10 +187,40 @@ test('Crossref radar confirms bounded conditions and preserves review state offl
   await page.reload()
   await expect(page.getByRole('heading', { name: 'MIGHTY Fixture' })).toBeVisible()
   await page.getByRole('button', { name: '切换' }).click(); await page.getByText('Radar B', { exact: true }).click()
-  await expect(page.getByText('当前没有待审核候选')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Radar B Same-ID Fixture' })).toBeVisible()
+  await expect(page.getByText('本地确定性评分 90')).not.toBeVisible()
+  await expect(page.getByText('轨迹规划增量追踪')).not.toBeVisible()
+  await expect(page.getByText('优先核对 MIGHTY')).not.toBeVisible()
+  await expect(page.getByText('fixture provider failure')).not.toBeVisible()
   await page.getByRole('button', { name: '切换' }).click(); await page.getByText('Radar A', { exact: true }).click()
   await page.getByRole('heading', { name: 'MIGHTY Fixture' }).locator('xpath=../..').getByRole('button', { name: '拒绝' }).click()
   await expect(page.getByRole('heading', { name: 'MIGHTY Fixture' })).not.toBeVisible()
   await page.getByRole('button', { name: '删除' }).click()
   await expect(page.getByText('尚未保存规则')).toBeVisible()
+})
+
+test('late radar responses cannot repopulate a switched workspace', async ({ page }) => {
+  let activePath = workspaces[0].db_path
+  await page.route('http://127.0.0.1:4173/api/**', async (route) => {
+    const request = route.request(); const url = new URL(request.url()); const path = url.pathname
+    const json = (value) => route.fulfill({ contentType: 'application/json', body: JSON.stringify(value) })
+    if (path === '/api/workspaces') return json({ items: workspaces, active_path: activePath, active_name: activePath.includes('a.db') ? 'Radar A' : 'Radar B' })
+    if (path === '/api/workspaces/load') { activePath = url.searchParams.get('db_path'); return json({ success: true }) }
+    const requestedPath = activePath
+    if (requestedPath.includes('a.db')) await new Promise((resolve) => setTimeout(resolve, 500))
+    if (path === '/api/collection-jobs') return json({ jobs: requestedPath.includes('a.db') ? [{ id: 1, collector: 'crossref_ieee', status: 'succeeded', query: { intent: 'topic', query: 'stale job' }, result: {} }] : [] })
+    if (path === '/api/candidates') return json({ candidates: requestedPath.includes('a.db') ? [{ id: 301, title: 'Stale Radar A Candidate', status: 'pending', source_kind: 'crossref_ieee', source_facts: {} }] : [{ id: 301, title: 'Current Radar B Candidate', status: 'pending', source_kind: 'crossref_ieee', source_facts: {} }] })
+    if (path === '/api/discovery-rules') return json({ rules: requestedPath.includes('a.db') ? [{ id: 1, name: 'Stale Radar A Rule', query: {} }] : [] })
+    if (path === '/api/discoveries/candidates/briefs') return json({ runs: requestedPath.includes('a.db') ? [{ id: 1, status: 'failed', candidate_ids: [301], error_message: 'Stale Radar A Brief' }] : [] })
+    return route.fulfill({ status: 500, contentType: 'application/json', body: JSON.stringify({ detail: `Unhandled ${request.method()} ${path}` }) })
+  })
+
+  await page.goto('/literature-radar')
+  await page.getByRole('button', { name: '切换' }).click()
+  await page.getByText('Radar B', { exact: true }).click()
+  await expect(page.getByRole('heading', { name: 'Current Radar B Candidate' })).toBeVisible()
+  await page.waitForTimeout(700)
+  await expect(page.getByRole('heading', { name: 'Stale Radar A Candidate' })).not.toBeVisible()
+  await expect(page.getByText('Stale Radar A Rule')).not.toBeVisible()
+  await expect(page.getByText('Stale Radar A Brief')).not.toBeVisible()
 })

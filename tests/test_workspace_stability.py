@@ -289,6 +289,14 @@ class WorkspaceStabilityTests(unittest.IsolatedAsyncioTestCase):
             provider="deepseek",
             model="fixture-model",
         )
+        candidate_brief_run_id = conn.execute(
+            """INSERT INTO candidate_ai_runs
+               (candidate_ids_json, input_scope_json, input_hash, processor,
+                processor_version, prompt_version, provider, model)
+               VALUES ('[301, 302]', '[\"title\"]', 'candidate-recovery-hash',
+                       'candidate_brief', '1', 'candidate-brief-v1',
+                       'deepseek', 'fixture-model')"""
+        ).lastrowid
         running_job_id = conn.execute(
             """INSERT INTO collection_jobs(collector, query_json, status)
                VALUES ('arxiv_api', '{"query":"fixture"}', 'running')"""
@@ -314,7 +322,7 @@ class WorkspaceStabilityTests(unittest.IsolatedAsyncioTestCase):
         beta_conn.commit()
         beta_conn.close()
 
-        self.assertEqual(workspace.recover_interrupted_runs(self.root), 5)
+        self.assertEqual(workspace.recover_interrupted_runs(self.root), 6)
         self.assertEqual(workspace.recover_interrupted_runs(self.root), 0)
 
         conn = sqlite3.connect(self.alpha)
@@ -328,6 +336,13 @@ class WorkspaceStabilityTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual([run["id"] for run in runs], [review_run["id"]])
         self.assertEqual(runs[0]["paper_ids"], [paper_id])
         self.assertEqual(runs[0]["status"], "failed")
+        candidate_brief_run = conn.execute(
+            "SELECT status, error_message, completed_at FROM candidate_ai_runs WHERE id = ?",
+            (candidate_brief_run_id,),
+        ).fetchone()
+        self.assertEqual(candidate_brief_run["status"], "failed")
+        self.assertIn("中断", candidate_brief_run["error_message"])
+        self.assertIsNotNone(candidate_brief_run["completed_at"])
         running_job = conn.execute(
             "SELECT status, candidate_count, error_message FROM collection_jobs WHERE id = ?",
             (running_job_id,),

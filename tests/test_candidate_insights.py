@@ -87,6 +87,10 @@ class CandidateInsightTests(unittest.IsolatedAsyncioTestCase):
         self.assertIn("标题包含完整关注词 +45", ranking[0]["reasons"])
         self.assertIn("有可追溯摘要 +10", ranking[0]["reasons"])
 
+    async def test_local_ranking_rejects_more_than_ui_limit(self):
+        with self.assertRaisesRegex(ValueError, "1–20"):
+            candidate_insights.rank_candidates(list(range(1, 22)))
+
     async def test_brief_is_bounded_audited_and_does_not_mutate_candidates(self):
         first = self.candidate("First", published="2026-08-20", abstract="A" * 3000)
         second = self.candidate("Second", published="2026-08-19", abstract="B")

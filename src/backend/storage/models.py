@@ -226,7 +226,7 @@ class CodeEvidenceRequest(BaseModel):
 
 
 class CandidateRankingRequest(BaseModel):
-    candidate_ids: List[int] = Field(min_length=1, max_length=50)
+    candidate_ids: List[int] = Field(min_length=1, max_length=20)
     focus: str = Field("", max_length=200)
     preferred_journal: str = Field("", max_length=200)
 
