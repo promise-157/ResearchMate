@@ -9,8 +9,9 @@ Windows .lnk -> WebView2 ResearchMate -> /api/blog/*
   -> WSL 后端固定操作 -> /home/promise/myblog 的机器接口
 ```
 
-PowerShell/Windows Terminal 只用于安装、修复和卸载。首版是可选、具名、隔离的 Hexo 集成，不提供
-任意插件、任意命令、自动部署、Git 操作、完整 Markdown 编辑器、远程网站强制内嵌或资料自动发布。
+PowerShell/Windows Terminal 只用于安装、修复和卸载。`myblog` 是独立成熟的发布工程，ResearchMate
+只是它的受控操作台，不接管其构建、主题、文章或 GitHub Pages 所有权。首版不提供任意插件、任意命令、
+自动部署、Git 操作、完整 Markdown 编辑器、远程网站强制内嵌或资料自动发布。
 
 ## 已调查事实
 
@@ -20,6 +21,8 @@ PowerShell/Windows Terminal 只用于安装、修复和卸载。首版是可选�
   dry-run、冲突计划或批量导入，不适合直接接网页。
 - `scripts/fix-image.js` 在构建时处理部分相对图片；导入器仍必须自己验证、复制和规范化图片，不能把
   构建过滤器当安全边界。
+- GitHub Actions 在 `main` push 后构建 Hexo 并更新 `gh-pages`；ResearchMate 的“打开公开博客”只访问
+  用户配置的公开 URL，不把 build 冒充发布，也不自动 commit/push。
 - ResearchMate 的 Windows 宿主持有一个私有 WSL supervisor；backend 在独立进程组中运行，关闭窗口
   会 SIGTERM 该组并在超时后只 SIGKILL 该组。未脱离该组的 Hexo 子进程会被兜底回收。
 - 当前设置 API 只公开脱敏设置；博客路径和公开 URL 应进入相同本机配置边界，不进入任何工作区 SQLite。
@@ -33,7 +36,6 @@ PowerShell/Windows Terminal 只用于安装、修复和卸载。首版是可选�
 | 博客路径、公开 URL、启用状态 | ResearchMate 本机忽略配置 | 不写工作区 |
 | 待确认导入计划、操作报告 | `myblog/.researchmate/` 原子 JSON/暂存目录，加入忽略 | 不写工作区；应用/取消后清理输入暂存 |
 | 构建输出 | `myblog/public` | 不复制 |
-| 预览进程状态和有界日志 | ResearchMate 后端内存；报告写上述操作记录 | 不写工作区 |
 
 `.researchmate/` 只保存计划、哈希、报告和尚未应用的临时上传，不是文章库。`list` 每次从 Hexo 文章
 目录读取元数据；应用计划后文章立即以 `myblog/source` 为准。
@@ -52,8 +54,7 @@ PowerShell/Windows Terminal 只用于安装、修复和卸载。首版是可选�
 - `import --dry-run`：扫描已暂存输入，验证 Markdown/front matter/图片，返回新增、跳过、冲突、重命名、
   图片映射和目标相对路径；生成内容哈希和不可猜测 `plan_id`，不写 `source`。
 - `import --apply --plan-id ...`：只应用同一份未过期计划；复核输入哈希及目标仍未变化，失败保持原子性。
-- `build`：通过项目锁定的本地 Hexo执行 clean/generate，超时和输出有界；绝不调用 deploy。
-- `preview`：以前台长进程在固定的 `127.0.0.1` 端口运行本地 Hexo server，供 ResearchMate 托管。
+- `build`：通过项目锁定的本地 Hexo 执行 clean/generate，超时和输出有界；绝不调用 deploy。
 
 现有交互脚本可以继续作为人工入口，但应改为调用机器接口，避免两套创建规则。不得自动 commit、push、
 deploy，也不得把部署配置或凭据写入 JSON/日志。
@@ -63,13 +64,13 @@ deploy，也不得把部署配置或凭据写入 JSON/日志。
 - `services/blog_integration.py`：验证配置、固定允许操作、通过 argv 数组调用已配置博客根目录下的固定
   CLI；`shell=False`，不接受 UI 传来的命令、可执行路径、工作目录或环境变量。
 - `services/blog_imports.py`：有界接收上传、规范相对路径、调用 dry-run/apply，并映射稳定错误。
-- `services/blog_preview.py`：单实例预览进程管理；不使用 detached/new session，捕获有界日志；显式停止、
-  FastAPI shutdown 和桌面 supervisor 进程组三层回收。
-- `/api/blog/settings|check|posts|drafts|imports|build|preview`：请求模型和 HTTP 边界。apply 只接收服务端
+- `/api/blog/settings|check|posts|drafts|imports|build`：请求模型和 HTTP 边界。apply 只接收服务端
   生成的 `plan_id`，不能重新提交目标路径或 shell 参数。
 - 设置页新增“Hexo 博客”区；博客页使用懒加载路由。未启用或检查失败时导航不显示，直接访问路由只
   显示配置引导，不加载博客 npm 依赖或启动进程。
 - 前端通过现有 `/api/*` 边界操作，不直接访问 WSL 文件，也不执行 `wsl.exe`。
+- “打开公开博客”由用户明确点击后把配置 URL 交给桌面宿主的新 WebView2 窗口或系统浏览器；不使用
+  iframe 强制嵌入，也不由后端抓取远程站点。
 
 只有出现 Hugo 等第二个真实目标后，才从这个具名实现提取 publishing adapter。
 
@@ -78,8 +79,8 @@ deploy，也不得把部署配置或凭据写入 JSON/日志。
 - 设置保存 `enabled`、绝对 WSL 博客路径和公开博客 URL；默认未启用。公开 URL 只校验/显示/打开，
   后端不主动访问。
 - 请求不能临时覆盖博客路径。配置路径解析后必须是目录，包含预期版本的机器接口、`package.json`、
-  本地 Hexo和 `source`；检查结果明确提示“构建会执行此受信任博客仓库中的本地代码”。
-- API 只能创建草稿、计划/应用导入、构建、启停预览和读取元数据/报告；没有通用 exec 或脚本名称参数。
+  本地 Hexo 和 `source`；检查结果明确提示“构建会执行此受信任博客仓库中的本地代码”。
+- API 只能创建草稿、计划/应用导入、构建和读取元数据/报告；没有通用 exec 或脚本名称参数。
 - 子进程使用最小环境、固定 cwd、超时、stdout/stderr 字节上限和并发互斥；错误响应不回显环境或配置。
 - 一个博客写操作在执行时拒绝第二个写操作；list/check 可只读并发。关闭应用时不接受新操作。
 
@@ -97,18 +98,13 @@ deploy，也不得把部署配置或凭据写入 JSON/日志。
 - 默认同名策略为 `stop`；`skip` 或确定性 `rename` 必须在 dry-run 计划中由用户明确选择并再次确认。
 - apply 使用临时同父目录写入、fsync/rename 或带回滚清单的原子安装；不能留下半篇文章或半套图片。
 
-## 预览生命周期
+## 后续可选的本地预览
 
-```text
-UI 启动预览 -> backend spawn 固定 myblog preview argv
-  -> 继承 backend 的 WSL process group
-UI 停止 -> backend 精确终止 preview 子进程树
-backend shutdown -> FastAPI shutdown hook 再清理
-Windows 窗口关闭/异常 -> supervisor SIGTERM/SIGKILL 已验证进程组兜底
-```
+首切片不启动 Hexo server。公开博客已经由 GitHub Pages 托管，本地 `build` 足以先验证内容能否生成；
+只有真实使用证明用户需要在推送前查看主题渲染时，才增加本地预览。
 
-预览仅绑定 `127.0.0.1`，端口固定或由后端从小型允许范围选择；冲突只报告，不终止未知监听者。状态 API
-返回 stopped/starting/running/failed、URL、启动时间和截断日志，不把“进程已创建”冒充“预览可用”。
+届时预览必须由后端以前台子进程启动、继承后端 WSL 进程组、只绑定 `127.0.0.1`，并由显式停止、
+FastAPI shutdown 和桌面 supervisor 三层回收。它仍不能与 Git commit/push 或部署混合。
 
 ## 首个完整纵向切片验收条件
 
@@ -118,20 +114,20 @@ Windows 窗口关闭/异常 -> supervisor SIGTERM/SIGKILL 已验证进程组兜�
 4. 多 Markdown、目录和 ZIP 均先上传一次并展示 dry-run：新增、跳过、冲突、图片、重命名和目标路径。
 5. 用户再次确认 `plan_id` 后才 apply；输入或目标变化会拒绝旧计划，成功后 list 立即反映新文章。
 6. build 只调用本地锁定 Hexo，显示成功/失败、耗时和有界日志，不 deploy/commit/push/联网。
-7. 可启动/停止本地预览并看到健康状态；关闭 ResearchMate 窗口后验证没有 Hexo、Shell 或其他孤儿进程。
+7. 用户可明确点击“打开公开博客”；未配置 URL 时给出设置引导，页面加载不自动访问远程网站。
 8. 操作报告由后端/CLI持有，页面刷新后仍可见；工作区切换不改变博客，也不把报告写入工作区数据库。
-9. 单元测试使用临时博客 fixture、假 process runner 和离线 ZIP；Playwright 使用离线 API mock；桌面测试
-   增加预览子进程随正常关闭、EOF 和强制关闭退出的证明。
+9. 单元测试使用临时博客 fixture、假 process runner 和离线 ZIP；Playwright 使用离线 API mock，不启动
+   Hexo、不访问 GitHub Pages。
 
 ## 实施顺序与门禁
 
 1. **R1 一致性收口（不扩展功能）**：清除工作区切换时的排序/部分加载残留；统一 UI/API/文档的排序
    数量上限；补候选 AI 中断恢复、失败历史和跨工作区浏览器断言。通过现有全套门禁后不再改 R1。
-2. **B0 myblog 机器契约**：完成 check/list/new/import/build/preview CLI、临时 fixture 和离线测试；人工脚本
+2. **B0 myblog 机器契约**：完成 check/list/new/import/build CLI、临时 fixture 和离线测试；人工脚本
    改为薄包装。没有该稳定契约，不接 ResearchMate UI。
-3. **B1 ResearchMate 完整首切片**：设置、可选导航、文章/草稿、上传计划/确认应用、构建报告、预览状态
-   与关闭回收按上述九条一起交付。
-4. **真实验收**：先复制一份脱敏临时博客做导入/构建/预览；全部通过后，用户再明确授权对真实
+3. **B1 ResearchMate 完整首切片**：设置、可选导航、文章/草稿、上传计划/确认应用、构建报告和打开
+   公开博客按上述九条一起交付。
+4. **真实验收**：先复制一份脱敏临时博客做导入/构建；全部通过后，用户再明确授权对真实
    `/home/promise/myblog` 创建测试草稿。始终不 deploy、commit、push 或联网。
 
 计划确认后，`ROADMAP.md` 只增加一个简短 B0/B1 入口并链接本文，不复制本计划正文。
