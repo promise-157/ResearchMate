@@ -115,11 +115,12 @@ def recover_interrupted_runs(workspace_dir: Path | None = None) -> int:
             conn.row_factory = sqlite3.Row
             conn.execute("PRAGMA foreign_keys=ON")
             _migrate_workspace_db(conn)
-            from storage import candidates, chats, items, paper_ai_runs
+            from storage import candidate_ai_runs, candidates, chats, items, paper_ai_runs
             recovered += candidates.fail_running_jobs(conn)
             recovered += chats.fail_running_turns(conn)
             recovered += items.fail_running_extraction_runs(conn)
             recovered += paper_ai_runs.fail_running_runs(conn)
+            recovered += candidate_ai_runs.fail_running_runs(conn)
         except (OSError, sqlite3.DatabaseError, ValueError):
             # Invalid/unavailable files are handled by the workspace import boundary.
             continue
@@ -177,9 +178,13 @@ def clear_workspace():
         conn.execute("DELETE FROM extraction_runs")
         conn.execute("DELETE FROM assets")
         conn.execute("DELETE FROM items")
+        conn.execute("DELETE FROM item_external_identities")
+        conn.execute("DELETE FROM candidate_source_records")
         conn.execute("DELETE FROM candidates")
         conn.execute("DELETE FROM collection_jobs")
+        conn.execute("DELETE FROM saved_discovery_rules")
         conn.execute("DELETE FROM chat_sessions")
+        conn.execute("DELETE FROM candidate_ai_runs")
         conn.execute("DELETE FROM paper_ai_runs")
         conn.execute("DELETE FROM papers")
         conn.execute("DELETE FROM crawl_tasks")

@@ -1,28 +1,20 @@
 """Bounded arXiv public API discovery adapter for review candidates."""
 import re
 import xml.etree.ElementTree as ET
-from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any
 
 import httpx
+
+from crawlers.discovery_models import DiscoveredRecord
 
 
 ARXIV_API_URL = "https://export.arxiv.org/api/query"
 ATOM = "{http://www.w3.org/2005/Atom}"
+ARXIV = "{http://arxiv.org/schemas/atom}"
 MAX_RESPONSE_BYTES = 2 * 1024 * 1024
 ALLOWED_CONTENT_TYPES = {
     "application/atom+xml", "application/xml", "text/xml",
 }
-
-
-@dataclass(frozen=True)
-class DiscoveredRecord:
-    title: str
-    content_text: str
-    summary: str
-    source_url: str
-    source_facts: dict[str, Any]
 
 
 class ArxivDiscoveryCollector:
@@ -32,6 +24,9 @@ class ArxivDiscoveryCollector:
         self.transport = transport
 
     async def search(self, query: str, limit: int) -> list[DiscoveredRecord]:
+        return await self.search_query(f"all:{query}", limit)
+
+    async def search_query(self, search_query: str, limit: int) -> list[DiscoveredRecord]:
         timeout = httpx.Timeout(20.0)
         async with httpx.AsyncClient(
             timeout=timeout,
@@ -41,7 +36,7 @@ class ArxivDiscoveryCollector:
             headers={"User-Agent": "ResearchMate/0.1 (local research workspace)"},
         ) as client:
             async with client.stream("GET", ARXIV_API_URL, params={
-                "search_query": f"all:{query}",
+                "search_query": search_query,
                 "start": 0,
                 "max_results": limit,
                 "sortBy": "relevance",
@@ -96,6 +91,7 @@ class ArxivDiscoveryCollector:
                     "arxiv_id": arxiv_id,
                     "authors": authors,
                     "categories": [value for value in categories if value],
+                    "comment": self._child_text_ns(entry, f"{ARXIV}comment") or None,
                     "published": self._text(entry, "published") or None,
                     "fetched_at": fetched_at,
                     "suggested_item_type": "paper",
@@ -106,6 +102,11 @@ class ArxivDiscoveryCollector:
     @staticmethod
     def _child_text(element: ET.Element, name: str) -> str:
         node = element.find(f"{ATOM}{name}")
+        return re.sub(r"\s+", " ", node.text or "").strip() if node is not None else ""
+
+    @staticmethod
+    def _child_text_ns(element: ET.Element, name: str) -> str:
+        node = element.find(name)
         return re.sub(r"\s+", " ", node.text or "").strip() if node is not None else ""
 
     def _text(self, element: ET.Element, name: str) -> str:

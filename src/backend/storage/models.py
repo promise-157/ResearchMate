@@ -1,7 +1,8 @@
 """
 Pydantic 数据模型。定义 API 请求/响应的数据结构。
 """
-from pydantic import AnyHttpUrl, BaseModel, Field, RootModel, field_validator
+from datetime import date
+from pydantic import AnyHttpUrl, BaseModel, Field, RootModel, field_validator, model_validator
 from typing import Annotated, Optional, List, Literal
 
 
@@ -196,3 +197,92 @@ class TemplateConfirmationRequest(RootModel[dict[str, Optional[str]]]):
 class ArxivDiscoveryRequest(BaseModel):
     query: str = Field(min_length=1, max_length=200)
     limit: int = Field(10, ge=1, le=20)
+
+
+class OpenAlexEnrichmentRequest(BaseModel):
+    candidate_ids: List[int] = Field(min_length=1, max_length=20)
+
+    @field_validator("candidate_ids")
+    @classmethod
+    def validate_candidate_ids(cls, value):
+        if any(candidate_id < 1 for candidate_id in value):
+            raise ValueError("候选 ID 必须为正整数")
+        if len(set(value)) != len(value):
+            raise ValueError("候选不能重复")
+        return value
+
+
+class CodeEvidenceRequest(BaseModel):
+    candidate_ids: List[int] = Field(min_length=1, max_length=5)
+
+    @field_validator("candidate_ids")
+    @classmethod
+    def validate_candidate_ids(cls, value):
+        if any(candidate_id < 1 for candidate_id in value):
+            raise ValueError("候选 ID 必须为正整数")
+        if len(set(value)) != len(value):
+            raise ValueError("候选不能重复")
+        return value
+
+
+class CandidateRankingRequest(BaseModel):
+    candidate_ids: List[int] = Field(min_length=1, max_length=50)
+    focus: str = Field("", max_length=200)
+    preferred_journal: str = Field("", max_length=200)
+
+    @field_validator("candidate_ids")
+    @classmethod
+    def validate_candidate_ids(cls, value):
+        if any(candidate_id < 1 for candidate_id in value) or len(set(value)) != len(value):
+            raise ValueError("候选 ID 必须是互不重复的正整数")
+        return value
+
+
+class CandidateBriefRequest(BaseModel):
+    candidate_ids: List[int] = Field(min_length=2, max_length=10)
+    focus: str = Field("", max_length=200)
+    preferred_journal: str = Field("", max_length=200)
+
+    @field_validator("candidate_ids")
+    @classmethod
+    def validate_brief_candidate_ids(cls, value):
+        if any(candidate_id < 1 for candidate_id in value) or len(set(value)) != len(value):
+            raise ValueError("候选 ID 必须是互不重复的正整数")
+        return value
+
+
+class CrossrefDiscoveryRequest(BaseModel):
+    intent: Literal["topic", "author", "journal_latest", "exact"] = "topic"
+    query: Optional[str] = Field(None, max_length=200)
+    scope: Literal["journal", "journal_conference"] = "journal"
+    date_from: Optional[date] = None
+    date_to: Optional[date] = None
+    date_basis: Literal["published", "indexed"] = "indexed"
+    container_title: Optional[str] = Field(None, max_length=200)
+    issn: Optional[str] = Field(None, max_length=20, pattern=r"^\d{4}-?[\dXx]{4}$")
+    sort: Literal["relevance", "published", "indexed"] = "relevance"
+    limit: int = Field(20, ge=1, le=50)
+
+    @model_validator(mode="after")
+    def validate_range(self):
+        query = (self.query or "").strip()
+        if self.intent in {"topic", "author", "exact"} and not query:
+            raise ValueError("该搜索方式需要搜索内容")
+        if self.intent == "journal_latest" and not (
+            (self.container_title or "").strip() or (self.issn or "").strip()
+        ):
+            raise ValueError("查看指定期刊最新论文需要期刊名称或 ISSN")
+        if self.intent != "exact" and (self.date_from is None or self.date_to is None):
+            raise ValueError("该搜索方式需要日期范围")
+        if self.date_from and self.date_to and self.date_from > self.date_to:
+            raise ValueError("开始日期不能晚于结束日期")
+        return self
+
+
+class SavedDiscoveryRuleCreate(BaseModel):
+    name: str = Field(min_length=1, max_length=100)
+    query: CrossrefDiscoveryRequest
+
+
+class SavedDiscoveryRuleUpdate(SavedDiscoveryRuleCreate):
+    pass

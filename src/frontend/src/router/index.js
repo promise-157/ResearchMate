@@ -12,6 +12,11 @@ const routes = [
     component: () => import('@/views/Materials.vue'),
   },
   {
+    path: '/literature-radar',
+    name: 'LiteratureRadar',
+    component: () => import('@/views/LiteratureRadar.vue'),
+  },
+  {
     path: '/papers',
     name: 'Papers',
     component: () => import('@/views/Papers.vue'),

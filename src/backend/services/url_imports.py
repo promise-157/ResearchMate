@@ -80,6 +80,9 @@ async def import_public_url(
 def accept_candidate(candidate_id: int) -> tuple[dict[str, Any], dict[str, Any], bool] | None:
     conn = get_active_connection()
     try:
+        # Serialize identity lookup + item creation inside this workspace. A second
+        # acceptance waits, then observes the DOI owner committed by the first.
+        conn.execute("BEGIN IMMEDIATE")
         candidate = candidate_repository.get_candidate(conn, candidate_id)
         if not candidate:
             return None
@@ -91,7 +94,15 @@ def accept_candidate(candidate_id: int) -> tuple[dict[str, Any], dict[str, Any],
                 raise RuntimeError("候选的已入库资料不存在")
             return candidate, item, True
 
-        duplicate = item_repository.find_by_hash(conn, candidate["content_hash"])
+        duplicate = None
+        identity = candidate.get("canonical_id")
+        identity_type = identity_value = None
+        if identity:
+            identity_type, identity_value = identity.split(":", 1)
+            duplicate = item_repository.find_by_external_identity(
+                conn, identity_type, identity_value
+            )
+        duplicate = duplicate or item_repository.find_by_hash(conn, candidate["content_hash"])
         created = duplicate is None
         if duplicate:
             item = duplicate
@@ -121,6 +132,17 @@ def accept_candidate(candidate_id: int) -> tuple[dict[str, Any], dict[str, Any],
                 },
                 "content_hash": candidate["content_hash"],
             }, commit=False)
+        if identity_type and identity_value:
+            identity_owner_id = item_repository.add_external_identity(
+                conn, item["id"], identity_type, identity_value
+            )
+            if identity_owner_id != item["id"]:
+                if created:
+                    conn.execute("DELETE FROM items WHERE id = ?", (item["id"],))
+                item = item_repository.get_item(conn, identity_owner_id)
+                if item is None:
+                    raise RuntimeError("规范身份关联的资料不存在")
+                created = False
         candidate = candidate_repository.set_candidate_status(
             conn, candidate_id, status="accepted", accepted_item_id=item["id"]
         )

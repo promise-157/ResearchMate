@@ -2,7 +2,7 @@
 import sqlite3
 
 
-MATERIAL_SCHEMA_VERSION = 12
+MATERIAL_SCHEMA_VERSION = 17
 
 
 def _add_column_if_missing(
@@ -186,6 +186,7 @@ def ensure_material_schema(conn: sqlite3.Connection) -> None:
             source_kind     TEXT NOT NULL,
             source_url      TEXT NOT NULL,
             content_hash    TEXT NOT NULL,
+            canonical_id    TEXT,
             source_facts_json TEXT NOT NULL DEFAULT '{}',
             status          TEXT NOT NULL DEFAULT 'pending',
             accepted_item_id INTEGER REFERENCES items(id) ON DELETE SET NULL,
@@ -193,6 +194,46 @@ def ensure_material_schema(conn: sqlite3.Connection) -> None:
             updated_at      TEXT NOT NULL DEFAULT (datetime('now')),
             UNIQUE(job_id, source_url),
             CHECK(status IN ('pending', 'accepted', 'rejected'))
+        );
+
+        CREATE TABLE IF NOT EXISTS item_external_identities (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            item_id          INTEGER NOT NULL REFERENCES items(id) ON DELETE CASCADE,
+            identity_type    TEXT NOT NULL,
+            normalized_value TEXT NOT NULL,
+            created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(identity_type, normalized_value),
+            UNIQUE(item_id, identity_type, normalized_value)
+        );
+
+        CREATE TABLE IF NOT EXISTS candidate_source_records (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            candidate_id      INTEGER NOT NULL REFERENCES candidates(id) ON DELETE CASCADE,
+            job_id            INTEGER NOT NULL REFERENCES collection_jobs(id) ON DELETE CASCADE,
+            source_kind       TEXT NOT NULL,
+            source_record_id  TEXT,
+            status            TEXT NOT NULL,
+            facts_json        TEXT NOT NULL DEFAULT '{}',
+            error_message     TEXT,
+            fetched_at        TEXT,
+            created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+            UNIQUE(job_id, candidate_id, source_kind),
+            CHECK(status IN ('succeeded', 'failed'))
+        );
+
+        CREATE TABLE IF NOT EXISTS saved_discovery_rules (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            name        TEXT NOT NULL,
+            source_kind TEXT NOT NULL,
+            query_json  TEXT NOT NULL,
+            last_run_at TEXT,
+            last_run_status TEXT,
+            last_error TEXT,
+            last_success_at TEXT,
+            last_successful_job_id INTEGER REFERENCES collection_jobs(id) ON DELETE SET NULL,
+            created_at  TEXT NOT NULL DEFAULT (datetime('now')),
+            updated_at  TEXT NOT NULL DEFAULT (datetime('now')),
+            CHECK(source_kind IN ('crossref_ieee'))
         );
 
         CREATE TABLE IF NOT EXISTS chat_sessions (
@@ -250,6 +291,29 @@ def ensure_material_schema(conn: sqlite3.Connection) -> None:
             CHECK(status IN ('running', 'succeeded', 'failed'))
         );
 
+        CREATE TABLE IF NOT EXISTS candidate_ai_runs (
+            id                INTEGER PRIMARY KEY AUTOINCREMENT,
+            candidate_ids_json TEXT NOT NULL DEFAULT '[]',
+            status            TEXT NOT NULL DEFAULT 'running',
+            input_scope_json  TEXT NOT NULL DEFAULT '[]',
+            input_hash        TEXT NOT NULL,
+            processor         TEXT NOT NULL,
+            processor_version TEXT NOT NULL,
+            prompt_version    TEXT NOT NULL,
+            provider          TEXT,
+            model             TEXT,
+            provider_model    TEXT,
+            input_tokens      INTEGER,
+            output_tokens     INTEGER,
+            duration_ms       INTEGER,
+            request_id        TEXT,
+            result_json       TEXT,
+            error_message     TEXT,
+            created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+            completed_at      TEXT,
+            CHECK(status IN ('running', 'succeeded', 'failed'))
+        );
+
         CREATE INDEX IF NOT EXISTS idx_items_type ON items(item_type);
         CREATE INDEX IF NOT EXISTS idx_items_status ON items(status);
         CREATE INDEX IF NOT EXISTS idx_items_created ON items(created_at DESC);
@@ -265,10 +329,19 @@ def ensure_material_schema(conn: sqlite3.Connection) -> None:
         CREATE INDEX IF NOT EXISTS idx_chat_turns_session ON chat_turns(session_id, id);
         CREATE INDEX IF NOT EXISTS idx_paper_ai_runs_paper ON paper_ai_runs(paper_id, id DESC);
         CREATE INDEX IF NOT EXISTS idx_paper_ai_runs_kind ON paper_ai_runs(run_kind, id DESC);
+        CREATE INDEX IF NOT EXISTS idx_candidate_ai_runs_id ON candidate_ai_runs(id DESC);
     """)
     _allow_multiple_candidates_per_job(conn)
     conn.execute(
         "CREATE INDEX IF NOT EXISTS idx_candidates_status ON candidates(status, created_at DESC)"
+    )
+    _add_column_if_missing(conn, "saved_discovery_rules", "last_run_at", "TEXT")
+    _add_column_if_missing(conn, "saved_discovery_rules", "last_run_status", "TEXT")
+    _add_column_if_missing(conn, "saved_discovery_rules", "last_error", "TEXT")
+    _add_column_if_missing(conn, "saved_discovery_rules", "last_success_at", "TEXT")
+    _add_column_if_missing(
+        conn, "saved_discovery_rules", "last_successful_job_id",
+        "INTEGER REFERENCES collection_jobs(id) ON DELETE SET NULL",
     )
     _add_column_if_missing(
         conn, "extraction_runs", "input_scope_json", "TEXT NOT NULL DEFAULT '[]'"
@@ -278,6 +351,22 @@ def ensure_material_schema(conn: sqlite3.Connection) -> None:
     )
     _add_column_if_missing(conn, "assets", "image_width", "INTEGER")
     _add_column_if_missing(conn, "assets", "image_height", "INTEGER")
+    _add_column_if_missing(conn, "candidates", "canonical_id", "TEXT")
+    _add_column_if_missing(conn, "collection_jobs", "result_json", "TEXT NOT NULL DEFAULT '{}'")
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_candidates_canonical ON candidates(canonical_id)"
+    )
+    conn.execute(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_candidates_job_canonical "
+        "ON candidates(job_id, canonical_id) WHERE canonical_id IS NOT NULL"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_item_identities_item ON item_external_identities(item_id)"
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_candidate_sources_candidate "
+        "ON candidate_source_records(candidate_id, id DESC)"
+    )
     for column, definition in (
         ("provider_model", "TEXT"),
         ("input_tokens", "INTEGER"),

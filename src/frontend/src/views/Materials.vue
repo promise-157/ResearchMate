@@ -10,7 +10,7 @@
       <div class="head-actions">
         <el-button :disabled="selectedIds.length === 0" @click="openActionProject">建立行动专题（{{ selectedIds.length }}）</el-button>
         <el-button :disabled="selectedIds.length < 2" @click="openComparison">比较所选（{{ selectedIds.length }}）</el-button>
-        <el-button @click="showDiscovery = true">发现 arXiv 候选</el-button>
+        <el-button @click="router.push('/literature-radar')">论文雷达</el-button>
         <el-button @click="showUrlImport = true">导入公开 URL</el-button>
         <el-button @click="imageInput?.click()">导入图片</el-button>
         <input ref="imageInput" class="hidden-input" type="file" accept="image/png,image/jpeg,image/webp" @change="uploadImage" />
@@ -198,24 +198,6 @@
       <template #footer>
         <el-button @click="showUrlImport = false">取消</el-button>
         <el-button type="primary" :loading="urlImporting" :disabled="!urlDraft.trim()" @click="submitUrlImport">读取并加入候选箱</el-button>
-      </template>
-    </el-dialog>
-
-    <el-dialog v-model="showDiscovery" title="从 arXiv 公开 API 发现候选" width="620px" :close-on-click-modal="false">
-      <p class="text-small text-secondary">
-        仅向 arXiv 官方公开 API 发送下方搜索词，最多返回 20 条摘要元数据；结果先进入候选箱，不下载 PDF，也不会自动入库。
-      </p>
-      <el-form label-position="top">
-        <el-form-item label="搜索词">
-          <el-input v-model="discoveryDraft.query" maxlength="200" placeholder="例如：local retrieval" @keyup.enter="submitDiscovery" />
-        </el-form-item>
-        <el-form-item label="结果上限">
-          <el-input-number v-model="discoveryDraft.limit" :min="1" :max="20" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button @click="showDiscovery = false">取消</el-button>
-        <el-button type="primary" :loading="discovering" :disabled="!discoveryDraft.query.trim()" @click="submitDiscovery">搜索并加入候选箱</el-button>
       </template>
     </el-dialog>
 
@@ -443,7 +425,6 @@ import {
   createItemAnalysisRun,
   createComparisonRun,
   confirmItemTemplate,
-  discoverArxiv,
   extractItemTemplate,
   fetchComparisonRuns,
   fetchCollectionJobs,
@@ -504,9 +485,6 @@ const urlImporting = ref(false)
 const candidatesLoading = ref(false)
 const pendingCandidates = ref([])
 const failedCollectionJobs = ref([])
-const showDiscovery = ref(false)
-const discovering = ref(false)
-const discoveryDraft = reactive({ query: '', limit: 10 })
 const itemTemplate = ref(null)
 const templateLoading = ref(false)
 const templateExtracting = ref(false)
@@ -635,19 +613,6 @@ async function submitUrlImport() {
     await loadCandidateData()
     ElMessage.error(error.response?.data?.detail || '公开 URL 导入失败')
   } finally { urlImporting.value = false }
-}
-
-async function submitDiscovery() {
-  discovering.value = true
-  try {
-    const result = await discoverArxiv(discoveryDraft.query.trim(), discoveryDraft.limit)
-    showDiscovery.value = false
-    await loadCandidateData()
-    ElMessage.success(`发现 ${result.candidates?.length || 0} 条结果，请在候选箱审核`)
-  } catch (error) {
-    await loadCandidateData()
-    ElMessage.error(error.response?.data?.detail || 'arXiv 发现失败')
-  } finally { discovering.value = false }
 }
 
 async function acceptUrlCandidate(candidate) {

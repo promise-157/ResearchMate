@@ -1,0 +1,36 @@
+{
+  "results": [
+    {
+      "id": "https://openalex.org/W1234567890",
+      "doi": "https://doi.org/10.1109/lra.2026.3681187",
+      "title": "OpenAlex independent title",
+      "type": "article",
+      "publication_date": "2026-06-01",
+      "updated_date": "2026-08-20T00:00:00.000000",
+      "abstract_inverted_index": {"Independent": [0], "abstract": [1], "evidence": [2]},
+      "authorships": [{"author": {"display_name": "Alice"}, "institutions": [{"display_name": "Robotics Lab"}]}],
+      "topics": [{"display_name": "Robot Motion Planning"}],
+      "concepts": [{"display_name": "Robotics"}],
+      "cited_by_count": 7,
+      "open_access": {"is_oa": true, "oa_status": "green"},
+      "best_oa_location": {"landing_page_url": "https://repository.example/paper"},
+      "primary_location": {"source": {"display_name": "IEEE Robotics and Automation Letters"}}
+    },
+    {
+      "id": "https://openalex.org/W9876543210",
+      "doi": "https://doi.org/10.1109/lra.2026.3713731",
+      "title": "Formal record without a public abstract",
+      "type": "article",
+      "publication_date": "2026-10-01",
+      "updated_date": "2026-08-21T00:00:00.000000",
+      "abstract_inverted_index": null,
+      "authorships": [],
+      "topics": [],
+      "concepts": [],
+      "cited_by_count": 0,
+      "open_access": {"is_oa": false, "oa_status": "closed"},
+      "best_oa_location": null,
+      "primary_location": {"source": {"display_name": "IEEE Robotics and Automation Letters"}}
+    }
+  ]
+}

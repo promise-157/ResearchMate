@@ -113,6 +113,40 @@ class WorkspaceArchiveTests(unittest.TestCase):
 
     def test_png_jpeg_webp_round_trip_preserves_database_ocr_and_isolation(self):
         items = self.create_three_assets()
+        conn = workspace.get_active_connection()
+        conn.execute(
+            "INSERT INTO item_external_identities(item_id, identity_type, normalized_value) VALUES (?, 'doi', '10.1109/fixture')",
+            (items[0]["id"],),
+        )
+        job_id = conn.execute(
+            "INSERT INTO collection_jobs(collector, query_json, status, result_json) VALUES ('crossref_ieee', '{}', 'succeeded', '{\"truncated\":true}')"
+        ).lastrowid
+        candidate_id = conn.execute(
+            """INSERT INTO candidates(job_id, title, content_text, source_kind, source_url,
+               content_hash, canonical_id) VALUES (?, 'Radar fixture', 'fixture', 'crossref_ieee',
+               'https://doi.org/10.1109/fixture', 'radar-fixture', 'doi:10.1109/fixture')""",
+            (job_id,),
+        ).lastrowid
+        conn.execute(
+            """INSERT INTO candidate_source_records
+               (candidate_id, job_id, source_kind, source_record_id, status, facts_json)
+               VALUES (?, ?, 'openalex', 'W123', 'succeeded', '{"doi":"10.1109/fixture"}')""",
+            (candidate_id, job_id),
+        )
+        conn.execute(
+            """INSERT INTO saved_discovery_rules(name, source_kind, query_json)
+               VALUES ('Portable IEEE rule', 'crossref_ieee', '{"intent":"topic","query":"robotics"}')"""
+        )
+        conn.execute(
+            """INSERT INTO candidate_ai_runs
+               (candidate_ids_json, status, input_scope_json, input_hash, processor,
+                processor_version, prompt_version, result_json)
+               VALUES (?, 'succeeded', '["title:300"]', 'brief-hash',
+                       'candidate_brief', '1', 'candidate-brief-v1', '{"overview":"fixture"}')""",
+            (json.dumps([candidate_id]),),
+        )
+        conn.commit()
+        conn.close()
         project = create_action_project({
             "title": "Portable evidence project",
             "objective": "Keep ordered evidence through archive import",
@@ -166,6 +200,21 @@ class WorkspaceArchiveTests(unittest.TestCase):
             "SELECT title, objective, notes, next_action, status FROM action_projects WHERE id = ?",
             (project["id"],),
         ).fetchone()
+        imported_identity = conn.execute(
+            "SELECT identity_type, normalized_value FROM item_external_identities"
+        ).fetchone()
+        imported_radar = conn.execute(
+            "SELECT canonical_id FROM candidates WHERE job_id = ?", (job_id,)
+        ).fetchone()
+        imported_source = conn.execute(
+            "SELECT source_kind, source_record_id, facts_json FROM candidate_source_records"
+        ).fetchone()
+        imported_rule = conn.execute(
+            "SELECT name, source_kind, query_json FROM saved_discovery_rules"
+        ).fetchone()
+        imported_brief = conn.execute(
+            "SELECT candidate_ids_json, status, result_json FROM candidate_ai_runs"
+        ).fetchone()
         imported_evidence = [row[0] for row in conn.execute(
             "SELECT item_id FROM action_project_items WHERE project_id = ? ORDER BY position",
             (project["id"],),
@@ -180,6 +229,16 @@ class WorkspaceArchiveTests(unittest.TestCase):
             "active",
         ))
         self.assertEqual(imported_evidence, [items[2]["id"], items[0]["id"]])
+        self.assertEqual(tuple(imported_identity), ("doi", "10.1109/fixture"))
+        self.assertEqual(imported_radar[0], "doi:10.1109/fixture")
+        self.assertEqual(tuple(imported_source), (
+            "openalex", "W123", '{"doi":"10.1109/fixture"}',
+        ))
+        self.assertEqual(tuple(imported_rule), (
+            "Portable IEEE rule", "crossref_ieee", '{"intent":"topic","query":"robotics"}',
+        ))
+        self.assertEqual(imported_brief[1], "succeeded")
+        self.assertEqual(json.loads(imported_brief[0]), [candidate_id])
         self.assertEqual(run_local_ocr(items[0]["id"], processor=FakeOCR())["status"], "succeeded")
         self.assertEqual(len(list(source_asset_dir.iterdir())), 3)
 

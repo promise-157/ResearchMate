@@ -185,6 +185,52 @@ class WorkspaceStabilityTests(unittest.IsolatedAsyncioTestCase):
             alpha_conn.close()
             beta_conn.close()
 
+    def test_clear_removes_radar_jobs_candidates_and_external_identities(self):
+        workspace.switch_workspace(self.alpha)
+        conn = workspace.get_active_connection()
+        item_id = conn.execute(
+            "INSERT INTO items(title, content_text, content_hash) VALUES ('radar', 'radar', 'radar-clear')"
+        ).lastrowid
+        conn.execute(
+            "INSERT INTO item_external_identities(item_id, identity_type, normalized_value) VALUES (?, 'doi', '10.1109/clear')",
+            (item_id,),
+        )
+        job_id = conn.execute(
+            "INSERT INTO collection_jobs(collector, query_json) VALUES ('crossref_ieee', '{}')"
+        ).lastrowid
+        candidate_id = conn.execute(
+            """INSERT INTO candidates(job_id, title, content_text, source_kind, source_url,
+               content_hash, canonical_id) VALUES (?, 'radar', 'radar', 'crossref_ieee',
+               'https://doi.org/10.1109/clear', 'candidate-clear', 'doi:10.1109/clear')""",
+            (job_id,),
+        ).lastrowid
+        conn.execute(
+            """INSERT INTO candidate_source_records
+               (candidate_id, job_id, source_kind, status, facts_json)
+               VALUES (?, ?, 'openalex', 'succeeded', '{}')""",
+            (candidate_id, job_id),
+        )
+        conn.execute(
+            "INSERT INTO saved_discovery_rules(name, source_kind, query_json) VALUES ('rule', 'crossref_ieee', '{}')"
+        )
+        conn.execute(
+            """INSERT INTO candidate_ai_runs
+               (candidate_ids_json, input_scope_json, input_hash, processor,
+                processor_version, prompt_version)
+               VALUES (?, '[]', 'clear-hash', 'candidate_brief', '1', 'candidate-brief-v1')""",
+            (f"[{candidate_id}]",),
+        )
+        conn.commit()
+        conn.close()
+        workspace.clear_workspace()
+        conn = sqlite3.connect(self.alpha)
+        for table in (
+            "collection_jobs", "candidates", "candidate_source_records",
+            "saved_discovery_rules", "candidate_ai_runs", "item_external_identities", "items",
+        ):
+            self.assertEqual(conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0], 0)
+        conn.close()
+
     def test_delete_removes_only_target_database_and_assets(self):
         asset_root = self.root / "assets"
         workspace.switch_workspace(self.beta)

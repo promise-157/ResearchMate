@@ -1,0 +1,20 @@
+{
+  "status": "ok",
+  "message": {
+    "total-results": 1,
+    "items": [
+      {
+        "DOI": "10.1109/LRA.2026.3713731",
+        "title": ["Simultaneous Localization and 3D-Semi Dense Mapping for Micro Drones Using Monocular Camera and Inertial Sensors"],
+        "author": [{"given": "Fixture", "family": "Author"}],
+        "container-title": ["IEEE Robotics and Automation Letters"],
+        "type": "journal-article",
+        "published": {"date-parts": [[2026, 10]]},
+        "created": {"date-time": "2026-07-15T00:00:00Z"},
+        "indexed": {"date-time": "2026-08-19T05:28:01Z"},
+        "ISSN": ["2377-3766"],
+        "score": 80.0
+      }
+    ]
+  }
+}

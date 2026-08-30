@@ -162,6 +162,29 @@ export function discoverArxiv(query, limit = 10) {
   return api.post('/discoveries/arxiv', { query, limit }, { timeout: 30000 })
 }
 
+export function discoverCrossref(data) {
+  return api.post('/discoveries/crossref', data, { timeout: 30000 })
+}
+
+export function enrichOpenAlex(candidateIds) {
+  return api.post('/discoveries/openalex/enrich', { candidate_ids: candidateIds }, { timeout: 90000 })
+}
+
+export function checkCodeEvidence(candidateIds) {
+  return api.post('/discoveries/code/evidence', { candidate_ids: candidateIds }, { timeout: 40000 })
+}
+
+export function rankDiscoveryCandidates(data) { return api.post('/discoveries/candidates/rank', data) }
+export function fetchCandidateBriefs() { return api.get('/discoveries/candidates/briefs') }
+export function createCandidateBrief(data) { return api.post('/discoveries/candidates/briefs', data, { timeout: 120000 }) }
+
+export function fetchDiscoveryRules() { return api.get('/discovery-rules') }
+export function saveDiscoveryRule(data) { return api.post('/discovery-rules', data) }
+export function updateDiscoveryRule(id, data) { return api.put(`/discovery-rules/${id}`, data) }
+export function runDiscoveryRule(id) { return api.post(`/discovery-rules/${id}/run`, undefined, { timeout: 30000 }) }
+export function runAllDiscoveryRules() { return api.post('/discovery-rules/run', undefined, { timeout: 120000 }) }
+export function deleteDiscoveryRule(id) { return api.delete(`/discovery-rules/${id}`) }
+
 export function fetchCollectionJobs() {
   return api.get('/collection-jobs')
 }

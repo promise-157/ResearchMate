@@ -26,6 +26,37 @@ def find_by_hash(conn: sqlite3.Connection, content_hash: str) -> Optional[dict[s
     return _decode(row)
 
 
+def find_by_external_identity(
+    conn: sqlite3.Connection, identity_type: str, normalized_value: str
+) -> Optional[dict[str, Any]]:
+    row = conn.execute(
+        """SELECT items.* FROM items
+           JOIN item_external_identities identity ON identity.item_id = items.id
+           WHERE identity.identity_type = ? AND identity.normalized_value = ?""",
+        (identity_type, normalized_value),
+    ).fetchone()
+    return _decode(row)
+
+
+def add_external_identity(
+    conn: sqlite3.Connection, item_id: int, identity_type: str, normalized_value: str
+) -> int:
+    conn.execute(
+        """INSERT INTO item_external_identities(item_id, identity_type, normalized_value)
+           VALUES (?, ?, ?)
+           ON CONFLICT(identity_type, normalized_value) DO NOTHING""",
+        (item_id, identity_type, normalized_value),
+    )
+    row = conn.execute(
+        """SELECT item_id FROM item_external_identities
+           WHERE identity_type = ? AND normalized_value = ?""",
+        (identity_type, normalized_value),
+    ).fetchone()
+    if row is None:
+        raise sqlite3.IntegrityError("外部身份写入后无法读取归属资料")
+    return int(row[0])
+
+
 def create_item(
     conn: sqlite3.Connection, data: dict[str, Any], *, commit: bool = True
 ) -> dict[str, Any]:

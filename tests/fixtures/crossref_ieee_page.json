@@ -1,0 +1,33 @@
+{
+  "status": "ok",
+  "message": {
+    "total-results": 4,
+    "next-cursor": "next-fixture",
+    "items": [
+      {
+        "DOI": "10.1109/LRA.2026.3681187",
+        "title": ["MIGHTY: Hermite &amp; Spline-Based Efficient Trajectory Planning"],
+        "author": [{"given": "Ada", "family": "Lovelace"}],
+        "container-title": ["IEEE Robotics and Automation Letters"],
+        "type": "journal-article",
+        "published": {"date-parts": [[2026, 7, 1]]},
+        "published-online": {"date-parts": [[2026, 6, 20]]},
+        "created": {"date-time": "2026-06-21T00:00:00Z"},
+        "indexed": {"date-time": "2026-08-19T00:00:00Z"},
+        "URL": "https://doi.org/10.1109/LRA.2026.3681187",
+        "ISSN": ["2377-3766"],
+        "score": 42.5
+      },
+      {
+        "DOI": "https://doi.org/10.1109/LRA.2026.3681187",
+        "title": ["Duplicate result"],
+        "type": "journal-article"
+      },
+      {
+        "DOI": "10.9999/not-ieee",
+        "title": ["Wrong prefix"],
+        "type": "journal-article"
+      }
+    ]
+  }
+}

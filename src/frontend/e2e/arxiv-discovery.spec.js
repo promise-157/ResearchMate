@@ -115,7 +115,9 @@ test('arXiv discovery persists failures and isolates explicitly reviewed candida
   })
 
   await page.goto('/materials')
-  await page.getByRole('button', { name: '发现 arXiv 候选' }).click()
+  await page.getByRole('button', { name: '论文雷达' }).click()
+  await expect(page).toHaveURL(/\/literature-radar$/)
+  await page.getByRole('tab', { name: 'arXiv 预印本' }).click()
   await page.getByLabel('搜索词').fill('local retrieval')
   await page.getByRole('spinbutton', { name: '结果上限' }).fill('2')
   await page.getByRole('button', { name: '搜索并加入候选箱' }).click()
@@ -129,24 +131,24 @@ test('arXiv discovery persists failures and isolates explicitly reviewed candida
     { query: 'local retrieval', limit: 2 },
     { query: 'local retrieval', limit: 2 },
   ])
-  await expect(page.getByText('当前工作区还没有通用资料')).toBeVisible()
+  await expect(page.getByText('待审核候选')).toBeVisible()
 
   const acceptedCandidate = page.getByRole('heading', { name: discovered[0].title, level: 3 })
   await acceptedCandidate.locator('xpath=../..').getByRole('button', { name: '接受入库' }).click()
   const rejectedCandidate = page.getByRole('heading', { name: discovered[1].title, level: 3 })
   await rejectedCandidate.locator('xpath=../..').getByRole('button', { name: '拒绝' }).click()
   await expect(page.getByRole('heading', { name: discovered[1].title, level: 3 })).not.toBeVisible()
-  await expect(page.getByRole('heading', { name: discovered[0].title, level: 3 })).toBeVisible()
+  await expect(page.getByRole('heading', { name: discovered[0].title, level: 3 })).not.toBeVisible()
 
   await page.reload()
-  await expect(page.getByRole('heading', { name: discovered[0].title, level: 3 })).toBeVisible()
+  await expect(page.getByRole('heading', { name: discovered[0].title, level: 3 })).not.toBeVisible()
   await page.getByRole('button', { name: '切换' }).click()
   await page.getByText('Arxiv B', { exact: true }).click()
   await expect(page.getByText('工作区: Arxiv B')).toBeVisible()
-  await expect(page.getByText('当前工作区还没有通用资料')).toBeVisible()
+  await expect(page.getByText('当前没有待审核候选')).toBeVisible()
   await expect(page.getByText('fixture arXiv timeout')).not.toBeVisible()
 
   await page.getByRole('button', { name: '切换' }).click()
   await page.getByText('Arxiv A', { exact: true }).click()
-  await expect(page.getByRole('heading', { name: discovered[0].title, level: 3 })).toBeVisible()
+  await expect(page.getByText('当前没有待审核候选')).toBeVisible()
 })

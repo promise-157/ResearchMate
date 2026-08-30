@@ -16,6 +16,29 @@ def _decode_candidate(row: sqlite3.Row | None) -> dict[str, Any] | None:
     return candidate
 
 
+def _decode_source_record(row: sqlite3.Row) -> dict[str, Any]:
+    record = dict(row)
+    raw = record.pop("facts_json", "{}")
+    try:
+        record["facts"] = json.loads(raw) if raw else {}
+    except (json.JSONDecodeError, TypeError):
+        record["facts"] = {}
+    return record
+
+
+def _attach_source_records(
+    conn: sqlite3.Connection, candidate: dict[str, Any] | None
+) -> dict[str, Any] | None:
+    if candidate is None:
+        return None
+    rows = conn.execute(
+        "SELECT * FROM candidate_source_records WHERE candidate_id = ? ORDER BY id DESC",
+        (candidate["id"],),
+    ).fetchall()
+    candidate["source_records"] = [_decode_source_record(row) for row in rows]
+    return candidate
+
+
 def _decode_job(row: sqlite3.Row | None) -> dict[str, Any] | None:
     if row is None:
         return None
@@ -25,6 +48,11 @@ def _decode_job(row: sqlite3.Row | None) -> dict[str, Any] | None:
         job["query"] = json.loads(raw) if raw else {}
     except (json.JSONDecodeError, TypeError):
         job["query"] = {}
+    raw_result = job.pop("result_json", "{}")
+    try:
+        job["result"] = json.loads(raw_result) if raw_result else {}
+    except (json.JSONDecodeError, TypeError):
+        job["result"] = {}
     return job
 
 
@@ -45,13 +73,15 @@ def complete_job(
     *,
     candidate_count: int = 1,
     error_message: str | None = None,
+    result: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     status = "failed" if error_message else "succeeded"
     conn.execute(
         """UPDATE collection_jobs
-           SET status = ?, candidate_count = ?, error_message = ?, updated_at = datetime('now')
+           SET status = ?, candidate_count = ?, error_message = ?, result_json = ?, updated_at = datetime('now')
            WHERE id = ?""",
-        (status, 0 if error_message else candidate_count, error_message, job_id),
+        (status, 0 if error_message else candidate_count, error_message,
+         json.dumps(result or {}, ensure_ascii=False), job_id),
     )
     conn.commit()
     return get_job(conn, job_id)
@@ -97,21 +127,31 @@ def create_candidate(conn: sqlite3.Connection, data: dict[str, Any]) -> dict[str
     cursor = conn.execute(
         """INSERT INTO candidates
            (job_id, title, content_text, summary, source_kind, source_url,
-            content_hash, source_facts_json)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+            content_hash, canonical_id, source_facts_json)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             data["job_id"], data["title"], data["content_text"], data["summary"],
             data["source_kind"], data["source_url"], data["content_hash"],
+            data.get("canonical_id"),
             json.dumps(data.get("source_facts", {}), ensure_ascii=False),
         ),
     )
     return get_candidate(conn, cursor.lastrowid)
 
 
-def get_candidate(conn: sqlite3.Connection, candidate_id: int) -> dict[str, Any] | None:
+def find_latest_by_canonical_id(
+    conn: sqlite3.Connection, canonical_id: str
+) -> dict[str, Any] | None:
     return _decode_candidate(conn.execute(
-        "SELECT * FROM candidates WHERE id = ?", (candidate_id,)
+        "SELECT * FROM candidates WHERE canonical_id = ? ORDER BY id DESC LIMIT 1",
+        (canonical_id,),
     ).fetchone())
+
+
+def get_candidate(conn: sqlite3.Connection, candidate_id: int) -> dict[str, Any] | None:
+    return _attach_source_records(conn, _decode_candidate(conn.execute(
+        "SELECT * FROM candidates WHERE id = ?", (candidate_id,)
+    ).fetchone()))
 
 
 def list_candidates(
@@ -123,7 +163,28 @@ def list_candidates(
         ).fetchall()
     else:
         rows = conn.execute("SELECT * FROM candidates ORDER BY id DESC").fetchall()
-    return [_decode_candidate(row) for row in rows]
+    return [_attach_source_records(conn, _decode_candidate(row)) for row in rows]
+
+
+def create_source_record(
+    conn: sqlite3.Connection, data: dict[str, Any]
+) -> dict[str, Any]:
+    cursor = conn.execute(
+        """INSERT INTO candidate_source_records
+           (candidate_id, job_id, source_kind, source_record_id, status,
+            facts_json, error_message, fetched_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+        (
+            data["candidate_id"], data["job_id"], data["source_kind"],
+            data.get("source_record_id"), data["status"],
+            json.dumps(data.get("facts", {}), ensure_ascii=False),
+            data.get("error_message"), data.get("fetched_at"),
+        ),
+    )
+    row = conn.execute(
+        "SELECT * FROM candidate_source_records WHERE id = ?", (cursor.lastrowid,)
+    ).fetchone()
+    return _decode_source_record(row)
 
 
 def set_candidate_status(

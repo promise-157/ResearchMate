@@ -15,8 +15,9 @@ sys.path.insert(0, str(BACKEND))
 
 from api.routes.discoveries import create_arxiv_discovery
 from crawlers.arxiv_discovery import (
-    ARXIV_API_URL, MAX_RESPONSE_BYTES, ArxivDiscoveryCollector, DiscoveredRecord,
+    ARXIV_API_URL, MAX_RESPONSE_BYTES, ArxivDiscoveryCollector,
 )
+from crawlers.discovery_models import DiscoveredRecord
 from services.discoveries import discover_arxiv, list_collection_jobs
 from services.url_imports import accept_candidate
 from storage.models import ArxivDiscoveryRequest
@@ -86,6 +87,13 @@ class DiscoveryTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(item["item_type"], "paper")
         self.assertEqual(item["metadata"]["provenance"]["arxiv_id"], "2608.00001")
         self.assertEqual(list_collection_jobs()[0]["accepted_count"], 1)
+
+        _, repeated = await discover_arxiv(
+            "local retrieval", limit=2, collector=FixtureDiscovery()
+        )
+        self.assertEqual(repeated[0]["canonical_id"], "arxiv:2608.00001")
+        self.assertEqual(repeated[0]["source_facts"]["existing_candidate_status"], "accepted")
+        self.assertEqual(repeated[0]["source_facts"]["existing_item_id"], item["id"])
 
     async def test_failure_is_visible_and_offline_atom_parser_is_bounded(self):
         with self.assertRaisesRegex(RuntimeError, "fixture timeout"):
